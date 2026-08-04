@@ -9,6 +9,14 @@
   font-family: var(--font);
 }
 
+.admin-appbar {
+  display: none;
+}
+
+.admin-drawer-backdrop {
+  display: none;
+}
+
 .admin-sidebar {
   display: flex;
   flex-direction: column;
@@ -436,20 +444,124 @@
 
 @media (max-width: 860px) {
   .admin-shell {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: unset;
+    grid-template-rows: unset;
+  }
+
+  .admin-appbar {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--sidebar);
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    flex-shrink: 0;
+  }
+
+  .admin-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .admin-appbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .admin-appbar-brand img {
+    border-radius: 50%;
+  }
+
+  .admin-appbar-brand strong {
+    font-family: var(--display);
+    letter-spacing: 0.04em;
+    font-weight: 400;
+    font-size: 1.05rem;
+  }
+
+  .admin-appbar-theme {
+    flex-shrink: 0;
+    font-size: 0.8rem;
+    padding: 0.35rem 0.55rem;
+  }
+
+  .admin-drawer-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+
+  .admin-shell.drawer-open .admin-drawer-backdrop {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   .admin-sidebar {
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(288px, 86vw);
+    z-index: 50;
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+    transform: translateX(-105%);
+    transition: transform 0.22s ease;
+    overflow-y: auto;
+    box-shadow: 8px 0 28px rgba(0, 0, 0, 0.28);
+  }
+
+  .admin-shell.drawer-open .admin-sidebar {
+    transform: translateX(0);
   }
 
   .admin-sidebar nav {
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex-direction: column;
+    flex-wrap: nowrap;
   }
 
   .admin-group {
-    width: 100%;
+    width: auto;
+  }
+
+  .admin-main {
+    min-height: 0;
+    flex: 1;
+  }
+
+  .admin-panel {
+    padding: 0.9rem 0.85rem 1.4rem;
+  }
+}
+
+@media (min-width: 861px) {
+  .admin-appbar,
+  .admin-drawer-backdrop {
+    display: none !important;
   }
 }
