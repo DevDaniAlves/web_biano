@@ -125,11 +125,42 @@ function MsgTicks({ delivery }: { delivery?: "pending" | "sent" | "failed" }) {
   );
 }
 
+function dedupeOutMessages(list: WaMessage[]): WaMessage[] {
+  const out: WaMessage[] = [];
+  for (const m of list) {
+    if (m.direction !== "out") {
+      out.push(m);
+      continue;
+    }
+    const mt = new Date(m.createdAt).getTime();
+    const dupIdx = out.findIndex((x) => {
+      if (x.direction !== "out" || x.type !== m.type) return false;
+      if (Math.abs(new Date(x.createdAt).getTime() - mt) > 8_000) return false;
+      if (m.type === "image" || m.type === "video") {
+        return (x.body ?? "") === (m.body ?? "") || (!x.body && !m.body);
+      }
+      return (x.body ?? "") === (m.body ?? "");
+    });
+    if (dupIdx >= 0) {
+      // Preferência: id real (não tmp) e mais recente
+      const cur = out[dupIdx];
+      if (cur.id.startsWith("tmp-") && !m.id.startsWith("tmp-")) {
+        out[dupIdx] = { ...m, delivery: m.delivery ?? "sent" };
+      }
+      continue;
+    }
+    out.push(m);
+  }
+  return out;
+}
+
 function mergeServerMessages(server: WaMessage[], prev: WaMessage[]): WaMessage[] {
-  const mapped = server.map((m) => ({
-    ...m,
-    delivery: (m.delivery ?? "sent") as "sent",
-  }));
+  const mapped = dedupeOutMessages(
+    server.map((m) => ({
+      ...m,
+      delivery: (m.delivery ?? "sent") as "sent",
+    }))
+  );
   const pending = prev.filter((m) => m.id.startsWith("tmp-") && m.delivery === "pending");
   if (pending.length === 0) return mapped;
 
@@ -143,7 +174,7 @@ function mergeServerMessages(server: WaMessage[], prev: WaMessage[]): WaMessage[
       return (s.body ?? "") === (p.body ?? "");
     });
   });
-  return [...mapped, ...kept];
+  return dedupeOutMessages([...mapped, ...kept]);
 }
 
 export default function WhatsAppPage({ embedded = false }: { embedded?: boolean }) {
@@ -356,7 +387,9 @@ function Inbox() {
     setAttachOpen(false);
     try {
       const r = await waApi.messages(id);
-      setMessages(r.messages.map((m) => ({ ...m, delivery: "sent" as const })));
+      setMessages(
+        dedupeOutMessages(r.messages.map((m) => ({ ...m, delivery: "sent" as const })))
+      );
       setReadOnly(r.readOnly);
       setSelectedFlags(r.contact);
       void refreshContacts();
