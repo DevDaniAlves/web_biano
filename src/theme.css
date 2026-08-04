@@ -17,10 +17,26 @@
   --surface: #0a0a0a;
   --header-bg: rgba(10, 10, 10, 0.88);
   --card: #141414;
+  --panel: #101312;
+  --panel-2: #161a18;
+  --sidebar: #0c0e0d;
+  --row-hover: rgba(255, 255, 255, 0.04);
+  --row-alt: rgba(255, 255, 255, 0.02);
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --input-bg: rgba(0, 0, 0, 0.35);
   --hero-grad: linear-gradient(120deg, #0a0a0a 0%, #1a120e 45%, #2a1a12 70%, #0a0a0a 100%);
   --font: "Outfit", system-ui, sans-serif;
   --display: "Bebas Neue", Impact, sans-serif;
   --script: "Pacifico", cursive;
+  --wa-bg: #0b141a;
+  --wa-panel: #111b21;
+  --wa-header: #202c33;
+  --wa-border: #2a3942;
+  --wa-muted: #8696a0;
+  --wa-in: #202c33;
+  --wa-out: #005c4b;
+  --wa-composer: #2a3942;
+  --wa-accent: #00a884;
   color-scheme: dark;
 }
 
@@ -42,7 +58,23 @@
   --surface: #f7f3ef;
   --header-bg: rgba(247, 243, 239, 0.92);
   --card: #ffffff;
+  --panel: #f3eee8;
+  --panel-2: #ffffff;
+  --sidebar: #ebe4dc;
+  --row-hover: rgba(26, 20, 16, 0.04);
+  --row-alt: rgba(26, 20, 16, 0.025);
+  --shadow: 0 8px 24px rgba(74, 50, 34, 0.1);
+  --input-bg: #ffffff;
   --hero-grad: linear-gradient(120deg, #f7f3ef 0%, #ebe0d4 40%, #d4b896 75%, #f7f3ef 100%);
+  --wa-bg: #e5ddd5;
+  --wa-panel: #ffffff;
+  --wa-header: #f0f2f5;
+  --wa-border: #d1d7db;
+  --wa-muted: #667781;
+  --wa-in: #ffffff;
+  --wa-out: #d9fdd3;
+  --wa-composer: #ffffff;
+  --wa-accent: #00a884;
   color-scheme: light;
 }
 

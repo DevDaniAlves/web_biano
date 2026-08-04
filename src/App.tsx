@@ -1,18 +1,42 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import { Store } from "./pages/Store";
-import { Checkout } from "./pages/Checkout";
-import { OrderDone } from "./pages/OrderDone";
+import AdminLayout from "./admin/AdminLayout";
+import { CatalogAdminPage, ConnectPage, ReportsPage } from "./admin/AdminPages";
 import GestorApp from "./gestor/GestorApp";
-import WhatsAppPage from "./whatsapp/WhatsAppPage";
+import LoginPage, { RequireAuth } from "./pages/LoginPage";
+import { Store } from "./pages/Store";
+import WhatsAppPage, { QueuesTab, UsersTab } from "./whatsapp/WhatsAppPage";
 
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Store />} />
-      <Route path="/checkout" element={<Checkout />} />
-      <Route path="/pedido-ok" element={<OrderDone />} />
-      <Route path="/gestor" element={<GestorApp />} />
-      <Route path="/atendimento" element={<WhatsAppPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/atendimento"
+        element={
+          <RequireAuth>
+            <WhatsAppPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <RequireAuth role="admin">
+            <AdminLayout />
+          </RequireAuth>
+        }
+      >
+        <Route index element={<Navigate to="whatsapp/conversas" replace />} />
+        <Route path="whatsapp/conversas" element={<WhatsAppPage embedded />} />
+        <Route path="whatsapp/relatorios" element={<ReportsPage />} />
+        <Route path="whatsapp/filas" element={<QueuesTab />} />
+        <Route path="whatsapp/conectar" element={<ConnectPage />} />
+        <Route path="whatsapp/usuarios" element={<UsersTab />} />
+        <Route path="catalogo" element={<CatalogAdminPage />} />
+        <Route path="gestor" element={<GestorApp embedded />} />
+      </Route>
+      <Route path="/gestor" element={<Navigate to="/admin/gestor" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

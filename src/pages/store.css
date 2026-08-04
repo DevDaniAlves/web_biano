@@ -173,6 +173,68 @@
   }
 }
 
+.hero-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.hero-cta.ghost {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+
+.contact-section {
+  padding: 2.5rem 1.5rem 4rem;
+  max-width: 560px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  text-align: left;
+  margin-top: 1rem;
+}
+
+.contact-form input,
+.contact-form textarea {
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-2, var(--surface));
+  color: inherit;
+  font: inherit;
+}
+
+.contact-form button {
+  margin-top: 0.25rem;
+  padding: 0.85rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.contact-ok {
+  color: var(--muted);
+}
+
+.contact-error {
+  color: #c62828;
+  margin: 0;
+}
+
+.catalog-empty {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+
 .store-footer {
   display: flex;
   align-items: center;

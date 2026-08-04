@@ -26,16 +26,23 @@ export interface WaUser {
   role: "admin" | "seller";
 }
 
+export type ContactStatus = "bot" | "waiting" | "human" | "awaiting_rating" | "closed";
+
 export interface WaContact {
   id: string;
   phone: string;
   name: string | null;
-  status: "bot" | "waiting" | "human" | "closed";
+  status: ContactStatus;
   lastMessageAt: string | null;
   lastMessagePreview: string | null;
+  lastClientMessageAt?: string | null;
   unreadCount: number;
   openToAll?: boolean;
   offeredToId?: string | null;
+  rating?: number | null;
+  canWarnInactivity?: boolean;
+  canResolveInactivity?: boolean;
+  inactiveMinutes?: number;
   assignedTo?: { id: string; name: string } | null;
   offeredTo?: { id: string; name: string } | null;
   queue?: { id: string; name: string } | null;
@@ -50,11 +57,23 @@ export interface WaMessage {
   mediaUrl: string | null;
   createdAt: string;
   sentBy?: { id: string; name: string } | null;
+  /** UI: pending = relógio, sent = ✓✓ */
+  delivery?: "pending" | "sent" | "failed";
 }
 
 export interface WaQueue {
   id: string;
   name: string;
+}
+
+export interface CatalogProduct {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  imageUrl: string | null;
+  active: boolean;
+  sortOrder: number;
 }
 
 export const waApi = {
@@ -71,8 +90,15 @@ export const waApi = {
     const qs = p.toString();
     return request<WaContact[]>(`/whatsapp/contacts${qs ? `?${qs}` : ""}`);
   },
-  messages: (contactId: string) =>
-    request<WaMessage[]>(`/whatsapp/messages?contactId=${encodeURIComponent(contactId)}`),
+  messages: (contactId: string, opts?: { peek?: boolean }) => {
+    const p = new URLSearchParams({ contactId });
+    if (opts?.peek) p.set("peek", "1");
+    return request<{
+      contact: WaContact;
+      messages: WaMessage[];
+      readOnly: boolean;
+    }>(`/whatsapp/messages?${p}`);
+  },
   sendText: (contactId: string, body: string) =>
     request<WaMessage>("/whatsapp/messages", {
       method: "POST",
@@ -102,6 +128,11 @@ export const waApi = {
       method: "POST",
       body: JSON.stringify({ contactId }),
     }),
+  warnInactivity: (contactId: string) =>
+    request("/whatsapp/contacts/inactivity-warn", {
+      method: "POST",
+      body: JSON.stringify({ contactId }),
+    }),
   queues: () => request<WaQueue[]>("/whatsapp/queues"),
   createQueue: (name: string) =>
     request<WaQueue>("/whatsapp/queues", {
@@ -120,4 +151,53 @@ export const waApi = {
       method: "POST",
       body: JSON.stringify({ userId, queueId: queueId ?? null }),
     }),
+  reports: () =>
+    request<{
+      byStatus: Record<string, number>;
+      avgRating: number | null;
+      ratingsCount: number;
+      messagesToday: number;
+    }>("/whatsapp/reports"),
+  connection: () =>
+    request<{
+      instanceName: string;
+      status: string;
+      lastQr: string | null;
+      credentialsOk: boolean;
+      live: unknown;
+    }>("/whatsapp/connection"),
+  connectInstance: (instanceName: string) =>
+    request("/whatsapp/connection", {
+      method: "POST",
+      body: JSON.stringify({ instanceName }),
+    }),
+  disconnectInstance: () => request("/whatsapp/connection", { method: "DELETE" }),
+  catalogConfig: () =>
+    request<{ mode: "wa_me" | "form"; waLink: string | null; keyword: string; phone: string | null }>(
+      "/catalog/config"
+    ),
+  catalogProducts: () => request<CatalogProduct[]>("/catalog/products"),
+  catalogLead: (data: { name: string; phone: string; message?: string }) =>
+    request<{ ok: boolean }>("/catalog/leads", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  adminProducts: () => request<CatalogProduct[]>("/catalog/admin/products"),
+  createProduct: (data: {
+    name: string;
+    price: number;
+    description?: string;
+    imageUrl?: string;
+  }) =>
+    request<CatalogProduct>("/catalog/admin/products", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateProduct: (id: string, data: Partial<CatalogProduct>) =>
+    request<CatalogProduct>(`/catalog/admin/products/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deleteProduct: (id: string) =>
+    request(`/catalog/admin/products/${id}`, { method: "DELETE" }),
 };

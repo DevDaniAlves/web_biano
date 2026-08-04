@@ -1,10 +1,8 @@
 import { Link } from "react-router-dom";
-import { useCart } from "../store/CartContext";
 import { useTheme } from "../store/ThemeContext";
 import "./Header.css";
 
 export function Header() {
-  const { count, setOpen } = useCart();
   const { theme, toggle } = useTheme();
 
   return (
@@ -18,18 +16,9 @@ export function Header() {
       </Link>
       <nav className="store-nav">
         <a href="#catalogo">Catálogo</a>
-        <Link to="/atendimento" className="nav-muted">
-          WhatsApp
-        </Link>
-        <Link to="/gestor" className="nav-muted">
-          Gestor
-        </Link>
+        <a href="#contato">Contato</a>
         <button type="button" className="theme-toggle" onClick={toggle} aria-label="Alternar tema">
           {theme === "dark" ? "Claro" : "Escuro"}
-        </button>
-        <button type="button" className="cart-btn" onClick={() => setOpen(true)}>
-          Carrinho
-          {count > 0 && <span className="cart-badge">{count}</span>}
         </button>
       </nav>
     </header>

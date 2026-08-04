@@ -1,7 +1,19 @@
 const API = import.meta.env.VITE_API_URL ?? "/api";
 
+function authHeaders(): HeadersInit {
+  const token = localStorage.getItem("calangus-token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API}${path}`, init);
+  const res = await fetch(`${API}${path}`, {
+    ...init,
+    headers: {
+      ...authHeaders(),
+      ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+      ...init?.headers,
+    },
+  });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
   return data as T;
@@ -48,8 +60,7 @@ export const api = {
   boletos: (status?: string) =>
     request<Boleto[]>(`/boletos?hoje=true${status ? `&status=${status}` : ""}`),
   jobs: () => request<Job[]>("/jobs"),
-  scrape: () =>
-    request<{ jobId: string }>("/scrape", { method: "POST" }),
+  scrape: () => request<{ jobId: string }>("/scrape", { method: "POST" }),
   job: (id: string) => request<Job>(`/jobs/${id}`),
   dispatch: () =>
     request<{ sent: number; failed: number; skipped: number; total: number }>("/dispatch", {
@@ -70,7 +81,11 @@ export const api = {
   importCsv: async (file: File) => {
     const form = new FormData();
     form.append("file", file);
-    const res = await fetch(`${API}/import/csv`, { method: "POST", body: form });
+    const res = await fetch(`${API}/import/csv`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? res.statusText);
     return data as { jobId: string; rows: number; upserted: number };

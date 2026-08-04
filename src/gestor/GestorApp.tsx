@@ -21,7 +21,7 @@ function brDate(ymd: string) {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : ymd;
 }
 
-export default function GestorApp() {
+export default function GestorApp({ embedded = false }: { embedded?: boolean }) {
   const { theme, toggle } = useTheme();
   const [stats, setStats] = useState<Stats | null>(null);
   const [boletos, setBoletos] = useState<Boleto[]>([]);
@@ -167,20 +167,19 @@ export default function GestorApp() {
     Object.values(stats?.byStatus ?? {}).reduce((acc, s) => acc + (s.valor ?? 0), 0) || 0;
 
   return (
-    <div className="gestor">
-      <div className="gestor-top">
-        <div style={{ display: "flex", gap: "0.85rem", alignItems: "center" }}>
-          <Link to="/" className="gestor-back">
-            ← Loja
-          </Link>
-          <Link to="/atendimento" className="gestor-back">
-            WhatsApp
-          </Link>
+    <div className={`gestor${embedded ? " embedded" : ""}`}>
+      {!embedded && (
+        <div className="gestor-top">
+          <div style={{ display: "flex", gap: "0.85rem", alignItems: "center" }}>
+            <Link to="/admin" className="gestor-back">
+              ← Painel
+            </Link>
+          </div>
+          <button type="button" className="theme-toggle" onClick={toggle}>
+            {theme === "dark" ? "Claro" : "Escuro"}
+          </button>
         </div>
-        <button type="button" className="theme-toggle" onClick={toggle}>
-          {theme === "dark" ? "Claro" : "Escuro"}
-        </button>
-      </div>
+      )}
       <div className="app">
         <header className="hero">
           <div className="gestor-brand-row">
