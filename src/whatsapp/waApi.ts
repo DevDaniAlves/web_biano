@@ -156,8 +156,60 @@ export const waApi = {
       byStatus: Record<string, number>;
       avgRating: number | null;
       ratingsCount: number;
+      ratingDistribution: Record<string, number>;
+      ratingsBySeller: Array<{
+        sellerId: string;
+        sellerName: string;
+        count: number;
+        avgRating: number | null;
+      }>;
+      recentRatings: Array<{
+        rating: number | null;
+        sellerName: string | null;
+        contactName: string | null;
+        phone: string;
+        at: string;
+      }>;
+      avgAssumeSeconds: number | null;
+      assumeCount: number;
+      assumeBySeller: Array<{
+        sellerId: string;
+        sellerName: string;
+        count: number;
+        avgSeconds: number | null;
+      }>;
       messagesToday: number;
     }>("/whatsapp/reports"),
+  getSchedule: (userId: string) =>
+    request<Array<{ id: string; dayOfWeek: number; startMin: number; endMin: number }>>(
+      `/whatsapp/users/${userId}/schedule`
+    ),
+  addSchedule: (userId: string, data: { dayOfWeek: number; startMin: number; endMin: number }) =>
+    request(`/whatsapp/users/${userId}/schedule`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  deleteSchedule: (id: string) =>
+    request(`/whatsapp/schedule/${id}`, { method: "DELETE" }),
+  getLeaves: (userId: string) =>
+    request<
+      Array<{
+        id: string;
+        type: string;
+        label: string | null;
+        startsAt: string;
+        endsAt: string;
+      }>
+    >(`/whatsapp/users/${userId}/leaves`),
+  addLeave: (
+    userId: string,
+    data: { type: string; label?: string; startsAt: string; endsAt: string }
+  ) =>
+    request(`/whatsapp/users/${userId}/leaves`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  deleteLeave: (id: string) => request(`/whatsapp/leaves/${id}`, { method: "DELETE" }),
   connection: () =>
     request<{
       instanceName: string;

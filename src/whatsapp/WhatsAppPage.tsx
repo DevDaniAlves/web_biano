@@ -279,14 +279,60 @@ export function UsersTab() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [slots, setSlots] = useState<
+    Array<{ id: string; dayOfWeek: number; startMin: number; endMin: number }>
+  >([]);
+  const [leaves, setLeaves] = useState<
+    Array<{ id: string; type: string; label: string | null; startsAt: string; endsAt: string }>
+  >([]);
+  const [dayOfWeek, setDayOfWeek] = useState(1);
+  const [startTime, setStartTime] = useState("08:00");
+  const [endTime, setEndTime] = useState("12:00");
+  const [leaveType, setLeaveType] = useState("ferias");
+  const [leaveLabel, setLeaveLabel] = useState("");
+  const [leaveStart, setLeaveStart] = useState("");
+  const [leaveEnd, setLeaveEnd] = useState("");
+  const [schedError, setSchedError] = useState("");
+
+  const DAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+  function minToHHMM(mins: number) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  }
+
+  function hhmmToMin(v: string) {
+    const [h, m] = v.split(":").map(Number);
+    return h * 60 + m;
+  }
 
   async function load() {
     setUsers(await waApi.users());
   }
 
+  async function loadSchedule(userId: string) {
+    setSchedError("");
+    const [s, l] = await Promise.all([waApi.getSchedule(userId), waApi.getLeaves(userId)]);
+    setSlots(s);
+    setLeaves(l);
+  }
+
   useEffect(() => {
     load().catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!selectedId) {
+      setSlots([]);
+      setLeaves([]);
+      return;
+    }
+    loadSchedule(selectedId).catch((e) => setSchedError(String(e.message)));
+  }, [selectedId]);
+
+  const selected = users.find((u) => u.id === selectedId) ?? null;
 
   return (
     <div className="admin-panel">
@@ -326,6 +372,7 @@ export function UsersTab() {
               <th>Nome</th>
               <th>E-mail</th>
               <th>Perfil</th>
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -340,11 +387,187 @@ export function UsersTab() {
                     {u.role === "admin" ? "Admin" : "Vendedor"}
                   </span>
                 </td>
+                <td>
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => setSelectedId(u.id === selectedId ? null : u.id)}
+                  >
+                    {u.id === selectedId ? "Fechar escala" : "Escala / folgas"}
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {selected && (
+        <section style={{ marginTop: "1.5rem" }}>
+          <h3 style={{ margin: "0 0 0.5rem" }}>Escala de {selected.name}</h3>
+          <p className="lede" style={{ marginTop: 0 }}>
+            Intervalos de atendimento (ex.: Seg 08:00–12:00 e 13:00–18:00). Sem escala cadastrada =
+            disponível (exceto folgas). Horário de Brasília.
+          </p>
+          {schedError && <p className="admin-error">{schedError}</p>}
+
+          <form
+            className="admin-toolbar"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                await waApi.addSchedule(selected.id, {
+                  dayOfWeek,
+                  startMin: hhmmToMin(startTime),
+                  endMin: hhmmToMin(endTime),
+                });
+                await loadSchedule(selected.id);
+              } catch (err) {
+                setSchedError(String((err as Error).message));
+              }
+            }}
+          >
+            <select value={dayOfWeek} onChange={(e) => setDayOfWeek(Number(e.target.value))}>
+              {DAY_LABELS.map((label, i) => (
+                <option key={label} value={i}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+            <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+            <button type="submit">Add intervalo</button>
+          </form>
+
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Dia</th>
+                  <th>Início</th>
+                  <th>Fim</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {slots.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ color: "var(--muted)" }}>
+                      Nenhum intervalo — vendedor considerado disponível fora de folgas
+                    </td>
+                  </tr>
+                ) : (
+                  slots.map((s) => (
+                    <tr key={s.id}>
+                      <td>{DAY_LABELS[s.dayOfWeek]}</td>
+                      <td>{minToHHMM(s.startMin)}</td>
+                      <td>{minToHHMM(s.endMin)}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="ghost"
+                          onClick={() =>
+                            void waApi.deleteSchedule(s.id).then(() => loadSchedule(selected.id))
+                          }
+                        >
+                          Remover
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <h3 style={{ margin: "1.5rem 0 0.5rem" }}>Folgas / férias / inatividade</h3>
+          <form
+            className="admin-toolbar"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                await waApi.addLeave(selected.id, {
+                  type: leaveType,
+                  label: leaveLabel || undefined,
+                  startsAt: new Date(leaveStart).toISOString(),
+                  endsAt: new Date(leaveEnd).toISOString(),
+                });
+                setLeaveLabel("");
+                await loadSchedule(selected.id);
+              } catch (err) {
+                setSchedError(String((err as Error).message));
+              }
+            }}
+          >
+            <select value={leaveType} onChange={(e) => setLeaveType(e.target.value)}>
+              <option value="ferias">Férias</option>
+              <option value="folga">Folga</option>
+              <option value="outro">Outro</option>
+            </select>
+            <input
+              value={leaveLabel}
+              onChange={(e) => setLeaveLabel(e.target.value)}
+              placeholder="Observação"
+            />
+            <input
+              type="datetime-local"
+              value={leaveStart}
+              onChange={(e) => setLeaveStart(e.target.value)}
+              required
+            />
+            <input
+              type="datetime-local"
+              value={leaveEnd}
+              onChange={(e) => setLeaveEnd(e.target.value)}
+              required
+            />
+            <button type="submit">Add período</button>
+          </form>
+
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Tipo</th>
+                  <th>Início</th>
+                  <th>Fim</th>
+                  <th>Obs.</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {leaves.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ color: "var(--muted)" }}>
+                      Nenhum período cadastrado
+                    </td>
+                  </tr>
+                ) : (
+                  leaves.map((l) => (
+                    <tr key={l.id}>
+                      <td>{l.type}</td>
+                      <td>{new Date(l.startsAt).toLocaleString("pt-BR")}</td>
+                      <td>{new Date(l.endsAt).toLocaleString("pt-BR")}</td>
+                      <td>{l.label ?? "—"}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="ghost"
+                          onClick={() =>
+                            void waApi.deleteLeave(l.id).then(() => loadSchedule(selected.id))
+                          }
+                        >
+                          Remover
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

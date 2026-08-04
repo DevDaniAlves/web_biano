@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
 import { waApi } from "../whatsapp/waApi";
 
+function fmtDuration(sec: number | null) {
+  if (sec == null) return "—";
+  if (sec < 60) return `${sec}s`;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  if (m < 60) return s ? `${m}min ${s}s` : `${m}min`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return rm ? `${h}h ${rm}min` : `${h}h`;
+}
+
 export function ReportsPage() {
-  const [data, setData] = useState<{
-    byStatus: Record<string, number>;
-    avgRating: number | null;
-    ratingsCount: number;
-    messagesToday: number;
-  } | null>(null);
+  const [data, setData] = useState<Awaited<ReturnType<typeof waApi.reports>> | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -39,6 +45,11 @@ export function ReportsPage() {
               <strong>{data.messagesToday}</strong>
             </article>
             <article>
+              <span>Tempo médio p/ assumir</span>
+              <strong>{fmtDuration(data.avgAssumeSeconds)}</strong>
+              <small style={{ color: "var(--muted)" }}>{data.assumeCount} conversas</small>
+            </article>
+            <article>
               <span>Média de avaliação</span>
               <strong>
                 {data.avgRating != null ? data.avgRating.toFixed(1) : "—"}
@@ -49,6 +60,121 @@ export function ReportsPage() {
               <strong>{data.ratingsCount}</strong>
             </article>
           </div>
+
+          <h2 style={{ marginTop: "1.5rem", fontSize: "1.05rem" }}>Tempo para assumir (por vendedor)</h2>
+          <p className="lede" style={{ marginTop: 0 }}>
+            Destinado a um vendedor: conta do disparo. Se outro assume após os 10 min: conta da
+            disponibilização para todos.
+          </p>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Vendedor</th>
+                  <th>Conversas</th>
+                  <th>Média</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.assumeBySeller.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} style={{ color: "var(--muted)" }}>
+                      Ainda sem dados (passa a gravar nas próximas assumidas).
+                    </td>
+                  </tr>
+                ) : (
+                  data.assumeBySeller.map((s) => (
+                    <tr key={s.sellerId}>
+                      <td>{s.sellerName}</td>
+                      <td>{s.count}</td>
+                      <td>{fmtDuration(s.avgSeconds)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <h2 style={{ marginTop: "1.5rem", fontSize: "1.05rem" }}>Avaliações</h2>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Nota</th>
+                  <th>Quantidade</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(data.ratingDistribution).map(([k, v]) => (
+                  <tr key={k}>
+                    <td>{k} ★</td>
+                    <td>{v}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <h2 style={{ marginTop: "1.5rem", fontSize: "1.05rem" }}>Média por vendedor</h2>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Vendedor</th>
+                  <th>Avaliações</th>
+                  <th>Média</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.ratingsBySeller.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} style={{ color: "var(--muted)" }}>
+                      Sem avaliações ainda
+                    </td>
+                  </tr>
+                ) : (
+                  data.ratingsBySeller.map((s) => (
+                    <tr key={s.sellerId}>
+                      <td>{s.sellerName}</td>
+                      <td>{s.count}</td>
+                      <td>{s.avgRating != null ? s.avgRating.toFixed(1) : "—"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <h2 style={{ marginTop: "1.5rem", fontSize: "1.05rem" }}>Últimas avaliações</h2>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Nota</th>
+                  <th>Cliente</th>
+                  <th>Vendedor</th>
+                  <th>Quando</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.recentRatings.map((r, i) => (
+                  <tr key={`${r.phone}-${i}`}>
+                    <td>{r.rating} ★</td>
+                    <td>
+                      {r.contactName || r.phone}
+                      {r.contactName ? (
+                        <div style={{ color: "var(--muted)", fontSize: "0.75rem" }}>{r.phone}</div>
+                      ) : null}
+                    </td>
+                    <td>{r.sellerName ?? "—"}</td>
+                    <td>{new Date(r.at).toLocaleString("pt-BR")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <h2 style={{ marginTop: "1.5rem", fontSize: "1.05rem" }}>Status das conversas</h2>
           <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
@@ -72,6 +198,7 @@ export function ReportsPage() {
     </div>
   );
 }
+
 
 export function ConnectPage() {
   const [instanceName, setInstanceName] = useState("BIANO");
