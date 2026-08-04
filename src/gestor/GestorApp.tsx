@@ -1,6 +1,13 @@
-import { Link } from "react-router-dom";
+﻿import { Link } from "react-router-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type Boleto, type BoletoStatus, type Job, type Stats } from "../api";
+import {
+  api,
+  type Boleto,
+  type BoletoStatus,
+  type GestorAutomation,
+  type Job,
+  type Stats,
+} from "../api";
 import { useTheme } from "../store/ThemeContext";
 import "./gestor.css";
 
@@ -10,6 +17,16 @@ const STATUS_FILTERS: Array<BoletoStatus | "all"> = [
   "sent",
   "failed",
   "skipped",
+];
+
+const WEEKDAY_OPTS: Array<{ d: number; label: string }> = [
+  { d: 1, label: "Seg" },
+  { d: 2, label: "Ter" },
+  { d: 3, label: "Qua" },
+  { d: 4, label: "Qui" },
+  { d: 5, label: "Sex" },
+  { d: 6, label: "Sáb" },
+  { d: 0, label: "Dom" },
 ];
 
 function money(v: number) {
@@ -26,6 +43,8 @@ export default function GestorApp({ embedded = false }: { embedded?: boolean }) 
   const [stats, setStats] = useState<Stats | null>(null);
   const [boletos, setBoletos] = useState<Boleto[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [auto, setAuto] = useState<GestorAutomation | null>(null);
+  const [autoSaving, setAutoSaving] = useState(false);
   const [filter, setFilter] = useState<BoletoStatus | "all">("all");
   const [busy, setBusy] = useState<
     "scrape" | "dispatch" | "import" | "reset" | "delete" | null
@@ -35,14 +54,16 @@ export default function GestorApp({ embedded = false }: { embedded?: boolean }) 
   const fileRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
-    const [s, b, j] = await Promise.all([
+    const [s, b, j, a] = await Promise.all([
       api.stats(),
       api.boletos(filter === "all" ? undefined : filter),
       api.jobs(),
+      api.getAutomation(),
     ]);
     setStats(s);
     setBoletos(b);
     setJobs(j);
+    setAuto(a);
   }, [filter]);
 
   useEffect(() => {
@@ -54,6 +75,28 @@ export default function GestorApp({ embedded = false }: { embedded?: boolean }) 
       if (pollRef.current) window.clearInterval(pollRef.current);
     };
   }, []);
+
+  async function saveAuto(
+    patch: Partial<{
+      enabled: boolean;
+      runTimeHHMM: string;
+      weekdays: number[];
+      dispatchAfterScrape: boolean;
+    }>
+  ) {
+    setAutoSaving(true);
+    setToast(null);
+    try {
+      const next = await api.updateAutomation(patch);
+      setAuto(next);
+      setToast({ text: "Automático atualizado" });
+    } catch (e) {
+      setToast({ text: String((e as Error).message ?? e), error: true });
+      await refresh().catch(() => {});
+    } finally {
+      setAutoSaving(false);
+    }
+  }
 
   function startJobPoll(jobId: string) {
     if (pollRef.current) window.clearInterval(pollRef.current);
@@ -192,47 +235,182 @@ export default function GestorApp({ embedded = false }: { embedded?: boolean }) 
             Coleta o extrato de parcelas em aberto do Meu Crediário (filtro Hoje), grava no banco e
             dispara a mensagem de cobrança.
           </p>
-          <div className="actions">
-            <button className="btn btn-primary" disabled={!!busy} onClick={onScrape}>
-              {busy === "scrape" ? "Coletando…" : "Coletar hoje (Playwright)"}
-            </button>
-            <button className="btn" disabled={!!busy || pending === 0} onClick={onDispatch}>
-              {busy === "dispatch" ? "Disparando…" : `Disparar pending (${pending})`}
-            </button>
-            <button
-              className="btn btn-ghost"
-              disabled={!!busy || !canReset}
-              onClick={onResetDispatch}
-            >
-              {busy === "reset" ? "Resetando…" : "Desmarcar envios (teste)"}
-            </button>
-            <button
-              className="btn btn-ghost"
-              disabled={!!busy}
-              onClick={() => fileRef.current?.click()}
-            >
-              {busy === "import" ? "Importando…" : "Importar CSV"}
-            </button>
-            <button
-              className="btn btn-danger"
-              disabled={!!busy || totalBoletos === 0}
-              onClick={onDeleteAll}
-            >
-              {busy === "delete" ? "Apagando…" : "Apagar todos"}
-            </button>
-            <input
-              ref={fileRef}
-              className="file-input"
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void onImport(f);
-                e.target.value = "";
-              }}
-            />
-          </div>
+          {auto && (
+            <div className="mode-toggle" role="group" aria-label="Modo do Gestor">
+              <button
+                type="button"
+                className={`mode-btn${!auto.enabled ? " active" : ""}`}
+                disabled={autoSaving}
+                onClick={() => {
+                  if (auto.enabled) void saveAuto({ enabled: false });
+                }}
+              >
+                Manual
+              </button>
+              <button
+                type="button"
+                className={`mode-btn${auto.enabled ? " active" : ""}`}
+                disabled={autoSaving}
+                onClick={() => {
+                  if (!auto.enabled) void saveAuto({ enabled: true });
+                }}
+              >
+                Automático
+              </button>
+            </div>
+          )}
         </header>
+
+        {(!auto || !auto.enabled) && (
+          <section className="mode-panel">
+            <div className="actions">
+              <button className="btn btn-primary" disabled={!!busy} onClick={onScrape}>
+                {busy === "scrape" ? "Coletando…" : "Coletar hoje (Playwright)"}
+              </button>
+              <button className="btn" disabled={!!busy || pending === 0} onClick={onDispatch}>
+                {busy === "dispatch" ? "Disparando…" : `Disparar pending (${pending})`}
+              </button>
+              <button
+                className="btn btn-ghost"
+                disabled={!!busy || !canReset}
+                onClick={onResetDispatch}
+              >
+                {busy === "reset" ? "Resetando…" : "Desmarcar envios (teste)"}
+              </button>
+              <button
+                className="btn btn-ghost"
+                disabled={!!busy}
+                onClick={() => fileRef.current?.click()}
+              >
+                {busy === "import" ? "Importando…" : "Importar CSV"}
+              </button>
+              <button
+                className="btn btn-danger"
+                disabled={!!busy || totalBoletos === 0}
+                onClick={onDeleteAll}
+              >
+                {busy === "delete" ? "Apagando…" : "Apagar todos"}
+              </button>
+              <input
+                ref={fileRef}
+                className="file-input"
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void onImport(f);
+                  e.target.value = "";
+                }}
+              />
+            </div>
+          </section>
+        )}
+
+        {auto?.enabled && (
+          <section className="auto-panel">
+            <div className="auto-head">
+              <div>
+                <h2>Agenda automática</h2>
+                <p>
+                  No horário de Brasília, roda o Playwright e em seguida o disparo WhatsApp — uma vez
+                  por dia.
+                </p>
+              </div>
+            </div>
+            <div className="auto-grid">
+              <label className="auto-field">
+                <span>Horário (Brasília)</span>
+                <input
+                  type="time"
+                  value={auto.runTimeHHMM}
+                  disabled={autoSaving}
+                  onChange={(e) => setAuto({ ...auto, runTimeHHMM: e.target.value })}
+                  onBlur={() => {
+                    if (auto.runTimeHHMM) void saveAuto({ runTimeHHMM: auto.runTimeHHMM });
+                  }}
+                />
+              </label>
+              <label className="auto-field auto-check">
+                <span>Após coletar</span>
+                <label className="inline-check">
+                  <input
+                    type="checkbox"
+                    checked={auto.dispatchAfterScrape}
+                    disabled={autoSaving}
+                    onChange={(e) => void saveAuto({ dispatchAfterScrape: e.target.checked })}
+                  />
+                  Disparar pending automaticamente
+                </label>
+              </label>
+              <div className="auto-field auto-days">
+                <span>Dias</span>
+                <div className="filters">
+                  {WEEKDAY_OPTS.map(({ d, label }) => {
+                    const on = auto.weekdays.includes(d);
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        className={`chip${on ? " active" : ""}`}
+                        disabled={autoSaving}
+                        onClick={() => {
+                          const weekdays = on
+                            ? auto.weekdays.filter((x) => x !== d)
+                            : [...auto.weekdays, d];
+                          setAuto({ ...auto, weekdays });
+                          void saveAuto({ weekdays });
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <p className="auto-status">
+              {auto.lastRunAt ? (
+                <>
+                  Última execução:{" "}
+                  {new Date(auto.lastRunAt).toLocaleString("pt-BR", {
+                    timeZone: "America/Sao_Paulo",
+                  })}{" "}
+                  · <strong>{auto.lastRunStatus ?? "—"}</strong>
+                  {auto.lastRunMessage ? ` — ${auto.lastRunMessage}` : ""}
+                </>
+              ) : (
+                "Ainda não rodou automaticamente."
+              )}
+            </p>
+            <div className="actions auto-extra">
+              <button
+                className="btn btn-ghost"
+                disabled={!!busy}
+                onClick={() => fileRef.current?.click()}
+              >
+                {busy === "import" ? "Importando…" : "Importar CSV"}
+              </button>
+              <button
+                className="btn btn-danger"
+                disabled={!!busy || totalBoletos === 0}
+                onClick={onDeleteAll}
+              >
+                {busy === "delete" ? "Apagando…" : "Apagar todos"}
+              </button>
+              <input
+                ref={fileRef}
+                className="file-input"
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void onImport(f);
+                  e.target.value = "";
+                }}
+              />
+            </div>
+          </section>
+        )}
 
         {toast && <p className={`toast${toast.error ? " error" : ""}`}>{toast.text}</p>}
 

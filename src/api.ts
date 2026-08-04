@@ -54,6 +54,20 @@ export interface Stats {
   byStatus: Record<string, { count: number; valor: number }>;
 }
 
+export interface GestorAutomation {
+  id: string;
+  enabled: boolean;
+  runTimeHHMM: string;
+  weekdays: number[];
+  dispatchAfterScrape: boolean;
+  lastRunAt: string | null;
+  lastRunYmd: string | null;
+  lastRunStatus: string | null;
+  lastRunMessage: string | null;
+  updatedAt: string;
+  timezone: string;
+}
+
 export const api = {
   health: () => request<{ ok: boolean }>("/health"),
   stats: () => request<Stats>("/boletos/stats?hoje=true"),
@@ -77,6 +91,17 @@ export const api = {
   deleteAll: () =>
     request<{ deletedBoletos: number; deletedJobs: number }>("/boletos", {
       method: "DELETE",
+    }),
+  getAutomation: () => request<GestorAutomation>("/gestor/automation"),
+  updateAutomation: (body: Partial<{
+    enabled: boolean;
+    runTimeHHMM: string;
+    weekdays: number[];
+    dispatchAfterScrape: boolean;
+  }>) =>
+    request<GestorAutomation>("/gestor/automation", {
+      method: "PATCH",
+      body: JSON.stringify(body),
     }),
   importCsv: async (file: File) => {
     const form = new FormData();
