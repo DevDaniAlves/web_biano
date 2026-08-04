@@ -28,6 +28,54 @@ export interface WaUser {
 
 export type ContactStatus = "bot" | "waiting" | "human" | "awaiting_rating" | "closed";
 
+export type ReportsData = {
+  period?: { from: string; to: string; label: string; preset: string };
+  byStatus: Record<string, number>;
+  avgRating: number | null;
+  ratingsCount: number;
+  ratingDistribution: Record<string, number>;
+  ratingsBySeller: Array<{
+    sellerId: string;
+    sellerName: string;
+    count: number;
+    avgRating: number | null;
+  }>;
+  recentRatings: Array<{
+    rating: number | null;
+    sellerName: string | null;
+    contactName: string | null;
+    phone: string;
+    at: string;
+  }>;
+  avgAssumeSeconds: number | null;
+  assumeCount: number;
+  assumeBySeller: Array<{
+    sellerId: string;
+    sellerName: string;
+    count: number;
+    avgSeconds: number | null;
+  }>;
+  messagesToday: number;
+  messagesInPeriod?: number;
+  expiredOffers: number;
+  takenFromOthers: number;
+  offerStatsBySeller: Array<{
+    sellerId: string;
+    sellerName: string;
+    expired: number;
+    taken: number;
+  }>;
+  seriesByDay: Array<{
+    date: string;
+    assumes: number;
+    ratings: number;
+    avgRating: number | null;
+    expired: number;
+    taken: number;
+  }>;
+  attendances: number;
+};
+
 export interface WaContact {
   id: string;
   phone: string;
@@ -151,35 +199,25 @@ export const waApi = {
       method: "POST",
       body: JSON.stringify({ userId, queueId: queueId ?? null }),
     }),
-  reports: () =>
-    request<{
-      byStatus: Record<string, number>;
-      avgRating: number | null;
-      ratingsCount: number;
-      ratingDistribution: Record<string, number>;
-      ratingsBySeller: Array<{
-        sellerId: string;
-        sellerName: string;
-        count: number;
-        avgRating: number | null;
-      }>;
-      recentRatings: Array<{
-        rating: number | null;
-        sellerName: string | null;
-        contactName: string | null;
-        phone: string;
-        at: string;
-      }>;
-      avgAssumeSeconds: number | null;
-      assumeCount: number;
-      assumeBySeller: Array<{
-        sellerId: string;
-        sellerName: string;
-        count: number;
-        avgSeconds: number | null;
-      }>;
-      messagesToday: number;
-    }>("/whatsapp/reports"),
+  reports: (params?: {
+    preset?: string;
+    from?: string;
+    to?: string;
+    month?: string;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.preset) q.set("preset", params.preset);
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
+    if (params?.month) q.set("month", params.month);
+    const qs = q.toString();
+    return request<ReportsData>(`/whatsapp/reports${qs ? `?${qs}` : ""}`);
+  },
+  seedDemoReports: (count = 90) =>
+    request<{ created: number }>("/whatsapp/reports/seed-demo", {
+      method: "POST",
+      body: JSON.stringify({ count }),
+    }),
   getSchedule: (userId: string) =>
     request<Array<{ id: string; dayOfWeek: number; startMin: number; endMin: number }>>(
       `/whatsapp/users/${userId}/schedule`

@@ -215,6 +215,95 @@
   font-weight: 600;
 }
 
+.report-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: end;
+  margin-bottom: 0.85rem;
+}
+
+.report-presets.mode-toggle {
+  margin: 0;
+}
+
+.report-field {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.report-field > span {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.report-export {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.report-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.report-chart {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+  padding: 0.75rem 0.85rem 0.4rem;
+}
+
+.report-chart h2 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.report-chart-wide {
+  grid-column: 1 / -1;
+}
+
+/* toggle reutilizado do gestor, versão admin */
+.mode-toggle {
+  display: inline-flex;
+  padding: 0.2rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2);
+  gap: 0.15rem;
+}
+
+.mode-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.mode-btn.active {
+  background: var(--red, #c62828);
+  color: #fff;
+}
+
+.mode-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .admin-table-wrap {
   border: 1px solid var(--line);
   border-radius: 12px;
