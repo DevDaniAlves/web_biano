@@ -540,6 +540,8 @@
 .bubble.flash {
   outline: 2px solid var(--wa-accent, #25d366);
   animation: wa-flash 1.2s ease;
+  background: rgba(37, 211, 102, 0.28) !important;
+  transition: background 0.35s ease;
 }
 
 @keyframes wa-flash {
@@ -549,6 +551,48 @@
   100% {
     filter: none;
   }
+}
+
+.wa-media-open {
+  display: block;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: zoom-in;
+  color: inherit;
+}
+
+.wa-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: rgba(0, 0, 0, 0.84);
+}
+
+.wa-lightbox img,
+.wa-lightbox video {
+  max-width: min(96vw, 920px);
+  max-height: 88vh;
+  border-radius: 10px;
+  object-fit: contain;
+}
+
+.wa-lightbox-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
 }
 
 .wa-quote {

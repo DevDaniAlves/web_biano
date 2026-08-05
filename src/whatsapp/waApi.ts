@@ -108,6 +108,15 @@ export interface WaMessage {
   externalId?: string | null;
   quotedExternalId?: string | null;
   quotedBody?: string | null;
+  quotedType?: string | null;
+  quotedMediaUrl?: string | null;
+  quoted?: {
+    messageId: string | null;
+    type: string;
+    body: string | null;
+    mediaUrl: string | null;
+    author: string | null;
+  } | null;
   createdAt: string;
   sentBy?: { id: string; name: string } | null;
   /** UI: pending = relógio, sent = ✓✓ */

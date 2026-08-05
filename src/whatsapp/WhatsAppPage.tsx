@@ -19,8 +19,35 @@ function mediaSrc(url: string | null) {
   if (!url) return null;
   if (url.startsWith("http") || url.startsWith("blob:")) return url;
   const base = import.meta.env.VITE_API_URL ?? "";
-  if (base && !base.startsWith("/")) return `${base.replace(/\/$/, "")}${url}`;
-  return url.startsWith("/") ? url : `/${url}`;
+  const path = url.startsWith("/") ? url : `/${url}`;
+  if (base && !base.startsWith("/")) return `${base.replace(/\/$/, "")}${path}`;
+  return path;
+}
+
+function isMediaPlaceholder(body: string | null) {
+  if (!body) return true;
+  const t = body.replace(/\*/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+  return /^(?:[^:]{1,48}: )?(\[(imagem|figurinha|áudio|audio|vídeo|video|documento)\]|\{imagem\})$/.test(t);
+}
+
+function quoteKindLabel(type: string, body: string | null) {
+  if (body && !isMediaPlaceholder(body)) return body;
+  if (type === "image" || type === "sticker") return "Imagem";
+  if (type === "video") return "Vídeo";
+  if (type === "audio") return "Áudio";
+  if (type === "document") return "Documento";
+  return body || "Mensagem";
+}
+
+function scrollToQuoted(messageId: string | null, externalId?: string | null) {
+  const el =
+    (messageId && document.getElementById(`msg-${messageId}`)) ||
+    (externalId &&
+      document.querySelector<HTMLElement>(`[data-ext="${CSS.escape(externalId)}"]`));
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.add("flash");
+  window.setTimeout(() => el.classList.remove("flash"), 1400);
 }
 
 function formatDuration(sec: number) {
@@ -35,10 +62,15 @@ function AudioBubble({ src }: { src: string }) {
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
+    setFailed(false);
+    setPlaying(false);
+    setProgress(0);
+    setDuration(0);
     const onTime = () => {
       setProgress(el.currentTime);
       if (el.duration && Number.isFinite(el.duration)) setDuration(el.duration);
@@ -50,13 +82,16 @@ function AudioBubble({ src }: { src: string }) {
       setPlaying(false);
       setProgress(0);
     };
+    const onErr = () => setFailed(true);
     el.addEventListener("timeupdate", onTime);
     el.addEventListener("loadedmetadata", onMeta);
     el.addEventListener("ended", onEnd);
+    el.addEventListener("error", onErr);
     return () => {
       el.removeEventListener("timeupdate", onTime);
       el.removeEventListener("loadedmetadata", onMeta);
       el.removeEventListener("ended", onEnd);
+      el.removeEventListener("error", onErr);
     };
   }, [src]);
 
@@ -77,14 +112,14 @@ function AudioBubble({ src }: { src: string }) {
   return (
     <div className="wa-audio-player">
       <audio ref={audioRef} src={src} preload="metadata" />
-      <button type="button" className="wa-audio-play" onClick={() => void toggle()} aria-label={playing ? "Pausar" : "Ouvir"}>
+      <button type="button" className="wa-audio-play" onClick={() => void toggle()} aria-label={playing ? "Pausar" : "Ouvir"} disabled={failed}>
         {playing ? "❚❚" : "▶"}
       </button>
       <div className="wa-audio-track">
         <div className="wa-audio-bar">
           <i style={{ width: `${pct}%` }} />
         </div>
-        <span>{formatDuration(progress)} / {formatDuration(duration)}</span>
+        <span>{failed ? "Áudio indisponível" : `${formatDuration(progress)} / ${formatDuration(duration)}`}</span>
       </div>
     </div>
   );
@@ -215,11 +250,20 @@ function dedupeOutMessages(list: WaMessage[]): WaMessage[] {
       return (x.body ?? "") === (m.body ?? "");
     });
     if (dupIdx >= 0) {
-      // Preferência: id real (não tmp) e mais recente
       const cur = out[dupIdx];
-      if (cur.id.startsWith("tmp-") && !m.id.startsWith("tmp-")) {
-        out[dupIdx] = { ...m, delivery: m.delivery ?? "sent" };
-      }
+      const pick =
+        (!cur.mediaUrl && m.mediaUrl) || (cur.id.startsWith("tmp-") && !m.id.startsWith("tmp-"))
+          ? m
+          : cur;
+      out[dupIdx] = {
+        ...pick,
+        mediaUrl: m.mediaUrl || cur.mediaUrl,
+        sentBy: m.sentBy || cur.sentBy,
+        externalId: m.externalId || cur.externalId,
+        quotedBody: pick.quotedBody || m.quotedBody || cur.quotedBody,
+        quotedExternalId: pick.quotedExternalId || m.quotedExternalId || cur.quotedExternalId,
+        delivery: pick.id.startsWith("tmp-") ? "pending" : (pick.delivery ?? "sent"),
+      };
       continue;
     }
     out.push(m);
@@ -731,6 +775,7 @@ function Inbox() {
   const [attachOpen, setAttachOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [lightbox, setLightbox] = useState<{ src: string; type: "image" | "video" } | null>(null);
   const [error, setError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
@@ -1180,80 +1225,69 @@ function Inbox() {
                 const delivery =
                   m.delivery ??
                   (m.id.startsWith("tmp-") ? "pending" : m.direction === "out" ? "sent" : undefined);
-                const quoted = m.quotedExternalId
-                  ? messages.find((x) => {
-                      if (!x.externalId && x.id !== m.quotedExternalId) return false;
-                      if (x.id === m.quotedExternalId) return true;
-                      const a = x.externalId || "";
-                      const b = m.quotedExternalId || "";
-                      return a === b || (a && b && (a.endsWith(b) || b.endsWith(a)));
-                    }) ?? null
-                  : null;
-                const quoteText = quoted?.body || m.quotedBody;
+                const quoted =
+                  m.quoted ??
+                  (m.quotedBody || m.quotedMediaUrl || m.quotedExternalId
+                    ? {
+                        messageId:
+                          messages.find((x) => {
+                            const a = x.externalId || "";
+                            const b = m.quotedExternalId || "";
+                            return x.id === m.quotedExternalId || (a && b && (a === b || a.endsWith(b) || b.endsWith(a)));
+                          })?.id ?? null,
+                        type: m.quotedType || "text",
+                        body: m.quotedBody ?? null,
+                        mediaUrl: m.quotedMediaUrl ?? null,
+                        author: selected.name || selected.phone,
+                      }
+                    : null);
                 const src = mediaSrc(m.mediaUrl);
                 const quotedSrc = mediaSrc(quoted?.mediaUrl ?? null);
                 const showImage = (m.type === "image" || m.type === "sticker") && src;
-                const showQuote = Boolean(quoteText || quoted);
-                const placeholderBodies = new Set(["[imagem]", "[figurinha]", "[áudio]", "[vídeo]", "[documento]"]);
-                const quoteLabel = quoteText
-                  || (quoted?.type === "image" || quoted?.type === "sticker"
-                    ? "[imagem]"
-                    : quoted?.type === "audio"
-                      ? "[áudio]"
-                      : quoted?.type === "video"
-                        ? "[vídeo]"
-                        : quoted?.type === "document"
-                          ? "[documento]"
-                          : "");
+                const showQuote = Boolean(quoted);
+                const hideBody = isMediaPlaceholder(m.body);
+                const quoteThumb =
+                  quotedSrc &&
+                  (quoted?.type === "image" || quoted?.type === "sticker" || quoted?.type === "video");
                 return (
                   <div
                     key={m.id}
                     id={`msg-${m.id}`}
+                    data-ext={m.externalId || undefined}
                     className={`bubble ${m.direction}${delivery === "pending" ? " pending" : ""}`}
                   >
-                    {showQuote && (
+                    {showQuote && quoted && (
                       <button
                         type="button"
                         className="wa-quote"
-                        onClick={() => {
-                          if (!quoted) return;
-                          const el = document.getElementById(`msg-${quoted.id}`);
-                          if (!el) return;
-                          el.scrollIntoView({ behavior: "smooth", block: "center" });
-                          el.classList.add("flash");
-                          window.setTimeout(() => el.classList.remove("flash"), 1400);
-                        }}
+                        onClick={() => scrollToQuoted(quoted.messageId, m.quotedExternalId)}
                       >
                         <div className="wa-quote-body">
-                          <strong>
-                            {quoted?.direction === "out"
-                              ? quoted.sentBy?.name || "Você"
-                              : quoted
-                                ? selected.name || selected.phone
-                                : selected.name || selected.phone}
-                          </strong>
-                          <span>{quoteLabel}</span>
+                          <strong>{quoted.author || selected.name || selected.phone}</strong>
+                          <span>{quoteKindLabel(quoted.type, quoted.body)}</span>
                         </div>
-                        {quotedSrc && (quoted?.type === "image" || quoted?.type === "sticker") && (
+                        {quoteThumb && quotedSrc && (
                           <img className="wa-quote-thumb" src={quotedSrc} alt="" />
                         )}
                       </button>
                     )}
-                    {showImage && (
-                      <a href={src ?? "#"} target="_blank" rel="noreferrer">
-                        <img src={src ?? ""} alt="" />
-                      </a>
+                    {showImage && src && (
+                      <button type="button" className="wa-media-open" onClick={() => setLightbox({ src, type: "image" })}>
+                        <img src={src} alt="" />
+                      </button>
                     )}
-                    {m.type === "audio" && src && <AudioBubble src={src} />}
+                    {m.type === "audio" && src && <AudioBubble key={src} src={src} />}
                     {m.type === "video" && src && (
-                      <video className="wa-video" controls src={src} preload="metadata" />
+                      <button type="button" className="wa-media-open" onClick={() => setLightbox({ src, type: "video" })}>
+                        <video className="wa-video" src={src} preload="metadata" muted />
+                      </button>
                     )}
                     {m.type === "document" && src && (
                       <a className="wa-file" href={src} target="_blank" rel="noreferrer">
-                        {m.body && !placeholderBodies.has(m.body) ? m.body : "Abrir documento"}
+                        {m.body && !hideBody ? m.body : "Abrir documento"}
                       </a>
                     )}
-                    {m.body && !placeholderBodies.has(m.body) && m.type !== "document" && (
+                    {m.body && !hideBody && m.type !== "document" && (
                       <p>
                         <RichText text={m.body} />
                       </p>
@@ -1371,6 +1405,18 @@ function Inbox() {
                   void sendMediaFile(file);
                 }}
               />
+            )}
+            {lightbox && (
+              <div className="wa-lightbox" onClick={() => setLightbox(null)} role="presentation">
+                <button type="button" className="wa-lightbox-close" onClick={() => setLightbox(null)} aria-label="Fechar">
+                  ×
+                </button>
+                {lightbox.type === "video" ? (
+                  <video src={lightbox.src} controls autoPlay onClick={(e) => e.stopPropagation()} />
+                ) : (
+                  <img src={lightbox.src} alt="" onClick={(e) => e.stopPropagation()} />
+                )}
+              </div>
             )}
           </>
         )}
