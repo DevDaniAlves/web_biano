@@ -6,21 +6,14 @@ import { ProductCard } from "../components/ProductCard";
 import { waApi, type CatalogProduct } from "../whatsapp/waApi";
 import "./store.css";
 
-function catalogUrl() {
-  return `${window.location.origin}/`;
-}
-
 function waMeLink(phone: string, text: string) {
   return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
 }
 
 function sellerMessage(keyword: string, productName?: string) {
-  const link = catalogUrl();
   if (productName) {
     return [
       `Olá! Vi o item *${productName}* no catálogo da Calangus Moda Jovem e gostaria de falar com um vendedor.`,
-      "",
-      `Catálogo: ${link}`,
       "",
       keyword,
     ].join("\n");
@@ -28,8 +21,6 @@ function sellerMessage(keyword: string, productName?: string) {
   return [
     "Olá! Vim pelo catálogo da Calangus Moda Jovem e gostaria de falar com um vendedor.",
     "Pode me ajudar a escolher uma peça?",
-    "",
-    `Catálogo: ${link}`,
     "",
     keyword,
   ].join("\n");
