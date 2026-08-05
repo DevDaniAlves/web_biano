@@ -594,7 +594,9 @@ function Inbox() {
   const [readOnly, setReadOnly] = useState(false);
   const [selectedFlags, setSelectedFlags] = useState<WaContact | null>(null);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("active");
+  const [status, setStatus] = useState(() =>
+    getStoredUser()?.role === "admin" ? "" : "active"
+  );
   const [sellerId, setSellerId] = useState("");
   const [sellers, setSellers] = useState<WaUser[]>([]);
   const [text, setText] = useState("");
@@ -627,7 +629,7 @@ function Inbox() {
     setSelectedId(id);
     setAttachOpen(false);
     try {
-      const r = await waApi.messages(id);
+      const r = await waApi.messages(id, { peek: user?.role === "admin" });
       setMessages(
         dedupeOutMessages(r.messages.map((m) => ({ ...m, delivery: "sent" as const })))
       );
@@ -841,6 +843,7 @@ function Inbox() {
           <div className="wa-filters">
             {[
               { v: "active", l: "Atendimento" },
+              ...(user?.role === "admin" ? [{ v: "bot", l: "Bot" }] : []),
               { v: "waiting", l: "Pendente" },
               { v: "human", l: "Em andamento" },
               { v: "awaiting_rating", l: "Avaliação" },
