@@ -77,7 +77,8 @@ export function ConnectPage() {
     }
   }
 
-  const open = /open|connected/i.test(info?.status ?? "");
+  const status = (info?.status ?? "").trim().toLowerCase();
+  const open = status === "open" || status === "connected";
 
   return (
     <div className="admin-panel">
