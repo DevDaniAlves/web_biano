@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { clearSession, getStoredUser } from "../auth";
+import ChangePasswordDialog from "../components/ChangePasswordDialog";
+import PushPermissionBanner from "../components/PushPermissionBanner";
+import { disablePushNotifications } from "../push";
 import { useTheme } from "../store/ThemeContext";
 import "./admin.css";
 
@@ -49,6 +52,7 @@ export default function AdminLayout() {
   const location = useLocation();
   const { theme, toggle } = useTheme();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [pwdOpen, setPwdOpen] = useState(false);
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -69,8 +73,10 @@ export default function AdminLayout() {
   }, [drawerOpen]);
 
   function logout() {
-    clearSession();
-    navigate("/login");
+    void disablePushNotifications().finally(() => {
+      clearSession();
+      navigate("/login");
+    });
   }
 
   const nav = (
@@ -108,6 +114,9 @@ export default function AdminLayout() {
       <div className="admin-sidebar-foot">
         <button type="button" className="theme-toggle" onClick={toggle}>
           {theme === "dark" ? "Modo claro" : "Modo escuro"}
+        </button>
+        <button type="button" className="admin-logout" onClick={() => setPwdOpen(true)}>
+          Alterar senha
         </button>
         <button type="button" className="admin-logout" onClick={logout}>
           Sair
@@ -148,8 +157,10 @@ export default function AdminLayout() {
       <aside className="admin-sidebar">{nav}</aside>
 
       <main className="admin-main">
+        <PushPermissionBanner active />
         <Outlet />
       </main>
+      {pwdOpen && <ChangePasswordDialog onClose={() => setPwdOpen(false)} />}
     </div>
   );
 }

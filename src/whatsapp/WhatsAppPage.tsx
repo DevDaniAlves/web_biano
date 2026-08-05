@@ -1,6 +1,9 @@
 ﻿import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { clearSession, getStoredUser, getToken } from "../auth";
+import ChangePasswordDialog from "../components/ChangePasswordDialog";
+import PushPermissionBanner from "../components/PushPermissionBanner";
+import { disablePushNotifications } from "../push";
 import { useTheme } from "../store/ThemeContext";
 import {
   waApi,
@@ -179,21 +182,25 @@ function mergeServerMessages(server: WaMessage[], prev: WaMessage[]): WaMessage[
 
 export default function WhatsAppPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const token = getToken();
   const user = getStoredUser();
   const { theme, toggle } = useTheme();
+  const [pwdOpen, setPwdOpen] = useState(false);
 
   if (!token || !user) {
     return <Navigate to="/login" replace />;
   }
 
   if (!embedded && user.role === "admin") {
-    return <Navigate to="/admin/whatsapp/conversas" replace />;
+    return <Navigate to={`/admin/whatsapp/conversas${location.search}`} replace />;
   }
 
   function logout() {
-    clearSession();
-    navigate("/login");
+    void disablePushNotifications().finally(() => {
+      clearSession();
+      navigate("/login");
+    });
   }
 
   return (
@@ -209,13 +216,18 @@ export default function WhatsAppPage({ embedded = false }: { embedded?: boolean 
               {theme === "dark" ? "Claro" : "Escuro"}
             </button>
             <Link to="/">Catálogo</Link>
+            <button type="button" onClick={() => setPwdOpen(true)}>
+              Alterar senha
+            </button>
             <button type="button" onClick={logout}>
               Sair
             </button>
           </nav>
         </header>
       )}
+      {!embedded && <PushPermissionBanner active />}
       <Inbox />
+      {pwdOpen && <ChangePasswordDialog onClose={() => setPwdOpen(false)} />}
     </div>
   );
 }
@@ -574,6 +586,8 @@ export function UsersTab() {
 
 function Inbox() {
   const user = getStoredUser();
+  const [params] = useSearchParams();
+  const contactParam = params.get("contact");
   const [contacts, setContacts] = useState<WaContact[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<WaMessage[]>([]);
@@ -641,6 +655,32 @@ function Inbox() {
     }, 8000);
     return () => clearInterval(t);
   }, [search, status]);
+
+  useEffect(() => {
+    if (contactParam) void openContact(contactParam);
+  }, [contactParam]);
+
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    function onMsg(event: MessageEvent) {
+      if (event.data?.type === "wa-push") {
+        void refreshContacts();
+        const id = event.data?.data?.contactId as string | undefined;
+        if (id && id === selectedId) void refreshMessages(id, true);
+      }
+      if (event.data?.type === "wa-open") {
+        const raw = String(event.data.url ?? "");
+        try {
+          const id = new URL(raw, window.location.origin).searchParams.get("contact");
+          if (id) void openContact(id);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    navigator.serviceWorker.addEventListener("message", onMsg);
+    return () => navigator.serviceWorker.removeEventListener("message", onMsg);
+  }, [selectedId]);
 
   useEffect(() => {
     if (!selectedId) return;

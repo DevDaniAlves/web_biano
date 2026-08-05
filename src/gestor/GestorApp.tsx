@@ -51,6 +51,8 @@ export default function GestorApp({ embedded = false }: { embedded?: boolean }) 
   >(null);
   const [toast, setToast] = useState<{ text: string; error?: boolean } | null>(null);
   const pollRef = useRef<number | null>(null);
+  const autoPollRef = useRef<number | null>(null);
+  const dispatchSeq = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
@@ -73,6 +75,7 @@ export default function GestorApp({ embedded = false }: { embedded?: boolean }) 
   useEffect(() => {
     return () => {
       if (pollRef.current) window.clearInterval(pollRef.current);
+      if (autoPollRef.current) window.clearInterval(autoPollRef.current);
     };
   }, []);
 
@@ -136,19 +139,22 @@ export default function GestorApp({ embedded = false }: { embedded?: boolean }) 
   }
 
   async function onDispatch() {
+    const seq = ++dispatchSeq.current;
     setBusy("dispatch");
     setToast(null);
     try {
       const r = await api.dispatch();
+      if (seq !== dispatchSeq.current) return;
       setToast({
         text: `Disparo: ${r.sent} enviados · ${r.failed} falhas · ${r.skipped} ignorados`,
         error: r.failed > 0,
       });
       await refresh();
     } catch (e) {
+      if (seq !== dispatchSeq.current) return;
       setToast({ text: String((e as Error).message ?? e), error: true });
     } finally {
-      setBusy(null);
+      if (seq === dispatchSeq.current) setBusy(null);
     }
   }
 
@@ -264,11 +270,19 @@ export default function GestorApp({ embedded = false }: { embedded?: boolean }) 
         {(!auto || !auto.enabled) && (
           <section className="mode-panel">
             <div className="actions">
-              <button className="btn btn-primary" disabled={!!busy} onClick={onScrape}>
-                {busy === "scrape" ? "Coletando…" : "Coletar hoje (Playwright)"}
+              <button
+                className="btn btn-primary"
+                disabled={!!busy && busy !== "scrape"}
+                onClick={onScrape}
+              >
+                {busy === "scrape" ? "Reiniciar coleta" : "Coletar hoje (Playwright)"}
               </button>
-              <button className="btn" disabled={!!busy || pending === 0} onClick={onDispatch}>
-                {busy === "dispatch" ? "Disparando…" : `Disparar pending (${pending})`}
+              <button
+                className="btn"
+                disabled={(!!busy && busy !== "dispatch") || pending === 0}
+                onClick={onDispatch}
+              >
+                {busy === "dispatch" ? "Reiniciar disparo" : `Disparar pending (${pending})`}
               </button>
               <button
                 className="btn btn-ghost"
@@ -385,21 +399,23 @@ export default function GestorApp({ embedded = false }: { embedded?: boolean }) 
             <div className="actions auto-extra">
               <button
                 className="btn btn-primary"
-                disabled={!!busy || autoSaving || auto.lastRunStatus === "running"}
+                disabled={(!!busy && busy !== "auto") || autoSaving}
                 onClick={() => {
                   void (async () => {
                     setBusy("auto");
                     setToast(null);
+                    if (autoPollRef.current) window.clearInterval(autoPollRef.current);
                     try {
                       const r = await api.runAutomationNow();
                       setAuto(r.automation);
                       setToast({ text: "Automático iniciado — scrape + disparo" });
-                      const poll = window.setInterval(async () => {
+                      autoPollRef.current = window.setInterval(async () => {
                         try {
                           const a = await api.getAutomation();
                           setAuto(a);
                           if (a.lastRunStatus && a.lastRunStatus !== "running") {
-                            window.clearInterval(poll);
+                            if (autoPollRef.current) window.clearInterval(autoPollRef.current);
+                            autoPollRef.current = null;
                             setBusy(null);
                             setToast({
                               text: a.lastRunMessage ?? a.lastRunStatus,
@@ -419,7 +435,7 @@ export default function GestorApp({ embedded = false }: { embedded?: boolean }) 
                 }}
               >
                 {busy === "auto" || auto.lastRunStatus === "running"
-                  ? "Rodando…"
+                  ? "Reiniciar agora"
                   : "Rodar de novo (teste)"}
               </button>
               <button

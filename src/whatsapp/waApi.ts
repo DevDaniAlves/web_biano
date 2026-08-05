@@ -131,6 +131,11 @@ export const waApi = {
       body: JSON.stringify({ email, password }),
     }),
   me: () => request<{ user: WaUser }>("/whatsapp/auth/me"),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/whatsapp/auth/password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
   contacts: (q?: { status?: string; search?: string }) => {
     const p = new URLSearchParams();
     if (q?.status) p.set("status", q.status);
