@@ -89,6 +89,7 @@ export interface WaContact {
   openToAll?: boolean;
   offeredToId?: string | null;
   rating?: number | null;
+  webhookPaused?: boolean;
   canWarnInactivity?: boolean;
   canResolveInactivity?: boolean;
   inactiveMinutes?: number;
@@ -187,6 +188,11 @@ export const waApi = {
     request<WaContact>("/whatsapp/contacts/restart-bot", {
       method: "POST",
       body: JSON.stringify({ contactId }),
+    }),
+  webhookPause: (contactId: string, paused: boolean) =>
+    request<WaContact>("/whatsapp/contacts/webhook-pause", {
+      method: "POST",
+      body: JSON.stringify({ contactId, paused }),
     }),
   warnInactivity: (contactId: string) =>
     request("/whatsapp/contacts/inactivity-warn", {

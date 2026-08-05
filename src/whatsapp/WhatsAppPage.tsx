@@ -23,7 +23,10 @@ function mediaSrc(url: string | null) {
   return url.startsWith("/") ? url : `/${url}`;
 }
 
-function badgeMeta(status: ContactStatus) {
+function badgeMeta(status: ContactStatus, webhookPaused?: boolean) {
+  if (webhookPaused) {
+    return { label: "Manual", className: "badge-manual" };
+  }
   switch (status) {
     case "waiting":
       return { label: "Pendente", className: "badge-pending" };
@@ -870,6 +873,27 @@ function Inbox() {
     }
   }
 
+  async function toggleWebhookPause() {
+    if (!selectedId) return;
+    const paused = !selected?.webhookPaused;
+    if (
+      paused &&
+      !confirm("Tirar este cliente do webhook? O bot não vai mais responder — use o WhatsApp do celular.")
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await waApi.webhookPause(selectedId, paused);
+      await refreshMessages(selectedId, true);
+      await refreshContacts();
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function warnIdle() {
     if (!selectedId) return;
     setBusy(true);
@@ -917,7 +941,12 @@ function Inbox() {
           <div className="wa-filters">
             {[
               { v: "active", l: "Atendimento" },
-              ...(user?.role === "admin" ? [{ v: "bot", l: "Bot" }] : []),
+              ...(user?.role === "admin"
+                ? [
+                    { v: "bot", l: "Bot" },
+                    { v: "manual", l: "Manual" },
+                  ]
+                : []),
               { v: "waiting", l: "Pendente" },
               { v: "human", l: "Em andamento" },
               { v: "awaiting_rating", l: "Avaliação" },
@@ -938,7 +967,7 @@ function Inbox() {
         {error && !selectedId && <p className="wa-error pad">{error}</p>}
         <ul>
           {contacts.map((c) => {
-            const b = badgeMeta(c.status);
+            const b = badgeMeta(c.status, c.webhookPaused);
             return (
               <li key={c.id}>
                 <button
@@ -987,21 +1016,26 @@ function Inbox() {
               </div>
               <div className="wa-actions">
                 {user?.role === "admin" && (
+                  <button type="button" className="ghost" disabled={busy} onClick={() => void toggleWebhookPause()}>
+                    {selected.webhookPaused ? "Voltar ao webhook" : "Atendimento manual"}
+                  </button>
+                )}
+                {user?.role === "admin" && !selected.webhookPaused && (
                   <button type="button" className="ghost" disabled={busy} onClick={() => void restartBot()}>
                     Reiniciar no bot
                   </button>
                 )}
-                {flags?.canWarnInactivity && !readOnly && (
+                {flags?.canWarnInactivity && !readOnly && !selected.webhookPaused && (
                   <button type="button" className="ghost" onClick={() => void warnIdle()}>
                     Avisar inatividade
                   </button>
                 )}
-                {flags?.status === "human" && !readOnly && (
+                {flags?.status === "human" && !readOnly && !selected.webhookPaused && (
                   <button type="button" onClick={() => void finish()}>
                     Finalizar
                   </button>
                 )}
-                {flags?.canResolveInactivity && !readOnly && (
+                {flags?.canResolveInactivity && !readOnly && !selected.webhookPaused && (
                   <button type="button" onClick={() => void finish()}>
                     Finalizar por inatividade
                   </button>

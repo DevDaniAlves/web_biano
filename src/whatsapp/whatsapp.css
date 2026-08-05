@@ -240,6 +240,11 @@
   color: #ce93d8;
 }
 
+.badge-manual {
+  background: rgba(255, 167, 38, 0.2);
+  color: #ffb74d;
+}
+
 .wa-unread {
   background: var(--wa-accent);
   color: #111;
