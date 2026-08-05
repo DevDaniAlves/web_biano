@@ -595,6 +595,8 @@ function Inbox() {
   const [selectedFlags, setSelectedFlags] = useState<WaContact | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("active");
+  const [sellerId, setSellerId] = useState("");
+  const [sellers, setSellers] = useState<WaUser[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
@@ -614,6 +616,7 @@ function Inbox() {
     const list = await waApi.contacts({
       search: search || undefined,
       status: status || undefined,
+      sellerId: user?.role === "admin" ? sellerId || undefined : undefined,
     });
     setContacts(list);
     void syncAppBadgeFromServer();
@@ -650,12 +653,17 @@ function Inbox() {
   }
 
   useEffect(() => {
+    if (user?.role !== "admin") return;
+    waApi.users().then(setSellers).catch(() => {});
+  }, [user?.role]);
+
+  useEffect(() => {
     refreshContacts().catch((e) => setError(String(e.message)));
     const t = setInterval(() => {
       refreshContacts().catch(() => {});
     }, 8000);
     return () => clearInterval(t);
-  }, [search, status]);
+  }, [search, status, sellerId]);
 
   useEffect(() => {
     if (contactParam) void openContact(contactParam);
@@ -815,6 +823,21 @@ function Inbox() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          {user?.role === "admin" && (
+            <select
+              className="wa-seller-filter"
+              value={sellerId}
+              onChange={(e) => setSellerId(e.target.value)}
+              aria-label="Filtrar por vendedor"
+            >
+              <option value="">Todos os vendedores</option>
+              {sellers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          )}
           <div className="wa-filters">
             {[
               { v: "active", l: "Atendimento" },

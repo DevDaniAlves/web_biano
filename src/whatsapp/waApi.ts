@@ -136,10 +136,11 @@ export const waApi = {
       method: "POST",
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
-  contacts: (q?: { status?: string; search?: string }) => {
+  contacts: (q?: { status?: string; search?: string; sellerId?: string }) => {
     const p = new URLSearchParams();
     if (q?.status) p.set("status", q.status);
     if (q?.search) p.set("search", q.search);
+    if (q?.sellerId) p.set("sellerId", q.sellerId);
     const qs = p.toString();
     return request<WaContact[]>(`/whatsapp/contacts${qs ? `?${qs}` : ""}`);
   },

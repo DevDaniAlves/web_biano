@@ -95,6 +95,17 @@
   color: inherit;
 }
 
+.wa-seller-filter {
+  width: 100%;
+  margin-top: 0.45rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--wa-border);
+  background: var(--wa-composer);
+  color: inherit;
+  font-size: 0.82rem;
+}
+
 .wa-filters {
   display: flex;
   flex-wrap: wrap;
