@@ -4,7 +4,7 @@ import { waApi } from "../whatsapp/waApi";
 export { ReportsPage } from "./ReportsPage";
 
 export function ConnectPage() {
-  const [instanceName, setInstanceName] = useState("BIANO");
+  const [instanceName, setInstanceName] = useState("");
   const [info, setInfo] = useState<{
     instanceName: string;
     status: string;
@@ -85,12 +85,15 @@ export function ConnectPage() {
         <h1>Conectar WhatsApp</h1>
       </div>
       <p className="lede">
-        Credenciais da Evolution ficam no .env. Aqui você cria/conecta a instância e lê o QR.
+        Credenciais da Evolution ficam no .env. A instância abaixo é a que o sistema usa para enviar
+        e receber mensagens.
       </p>
       {error && <p className="admin-error">{error}</p>}
       {info && (
         <p>
-          Status:{" "}
+          Instância{" "}
+          <strong>{info.instanceName || "—"}</strong>
+          {" · "}
           <span className={`connect-status${open ? " open" : ""}`}>{info.status}</span>
           {!info.credentialsOk && " · Configure WHATSAPP_API_URL e WHATSAPP_API_KEY"}
         </p>
@@ -107,7 +110,7 @@ export function ConnectPage() {
           onChange={(e) => setInstanceName(e.target.value)}
           placeholder="Nome da instância"
         />
-        <button type="button" disabled={busy || open} onClick={() => void connect()}>
+        <button type="button" disabled={busy || open || !instanceName.trim()} onClick={() => void connect()}>
           Conectar / Gerar QR
         </button>
         <button type="button" className="ghost" disabled={busy} onClick={() => void disconnect()}>
