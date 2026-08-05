@@ -1051,7 +1051,9 @@ function Inbox() {
                   ? messages.find((x) => x.externalId && x.externalId === m.quotedExternalId)
                   : null;
                 const quoteText = quoted?.body || m.quotedBody;
-                const showImage = (m.type === "image" || m.type === "sticker") && m.mediaUrl;
+                const src = mediaSrc(m.mediaUrl);
+                const showImage = (m.type === "image" || m.type === "sticker") && src;
+                const placeholderBodies = new Set(["[imagem]", "[figurinha]", "[áudio]", "[vídeo]", "[documento]"]);
                 return (
                   <div
                     key={m.id}
@@ -1076,17 +1078,26 @@ function Inbox() {
                       </button>
                     )}
                     {showImage && (
-                      <a href={mediaSrc(m.mediaUrl) ?? "#"} target="_blank" rel="noreferrer">
-                        <img src={mediaSrc(m.mediaUrl) ?? ""} alt="" />
+                      <a href={src ?? "#"} target="_blank" rel="noreferrer">
+                        <img src={src ?? ""} alt="" />
                       </a>
                     )}
-                    {m.body && m.body !== "[imagem]" && m.body !== "[figurinha]" && (
+                    {m.type === "audio" && src && <audio className="wa-audio" controls src={src} preload="metadata" />}
+                    {m.type === "video" && src && (
+                      <video className="wa-video" controls src={src} preload="metadata" />
+                    )}
+                    {m.type === "document" && src && (
+                      <a className="wa-file" href={src} target="_blank" rel="noreferrer">
+                        {m.body && !placeholderBodies.has(m.body) ? m.body : "Abrir documento"}
+                      </a>
+                    )}
+                    {m.body && !placeholderBodies.has(m.body) && m.type !== "document" && (
                       <p>
                         <RichText text={m.body} />
                       </p>
                     )}
-                    {!showImage && (m.type === "image" || m.type === "sticker") && !m.body && (
-                      <p>[imagem]</p>
+                    {!src && ["image", "sticker", "audio", "video", "document"].includes(m.type) && (
+                      <p>{m.body || `[${m.type}]`}</p>
                     )}
                     <small>
                       <span>

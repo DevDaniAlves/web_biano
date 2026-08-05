@@ -68,8 +68,7 @@ export function Store() {
   }
 
   if (isStandaloneDisplay()) {
-    const dest = homePathForSession();
-    if (dest !== "/") return <Navigate to={dest} replace />;
+    return <Navigate to={homePathForSession()} replace />;
   }
 
   return (
