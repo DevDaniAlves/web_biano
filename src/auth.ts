@@ -30,3 +30,17 @@ export function authHeaders(): HeadersInit {
   const token = getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
+
+/** Destino do PWA / login: catálogo só se não estiver autenticado. */
+export function homePathForSession() {
+  const token = getToken();
+  const user = getStoredUser();
+  if (!token || !user) return "/";
+  return user.role === "admin" ? "/admin/whatsapp/conversas" : "/atendimento";
+}
+
+export function isStandaloneDisplay() {
+  if (typeof window === "undefined") return false;
+  const nav = window.navigator as Navigator & { standalone?: boolean };
+  return window.matchMedia("(display-mode: standalone)").matches || nav.standalone === true;
+}

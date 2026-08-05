@@ -3,7 +3,7 @@ import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react
 import { clearSession, getStoredUser, getToken } from "../auth";
 import ChangePasswordDialog from "../components/ChangePasswordDialog";
 import PushPermissionBanner from "../components/PushPermissionBanner";
-import { disablePushNotifications } from "../push";
+import { disablePushNotifications, syncAppBadgeFromServer } from "../push";
 import { useTheme } from "../store/ThemeContext";
 import {
   waApi,
@@ -594,7 +594,7 @@ function Inbox() {
   const [readOnly, setReadOnly] = useState(false);
   const [selectedFlags, setSelectedFlags] = useState<WaContact | null>(null);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState("active");
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
@@ -616,6 +616,7 @@ function Inbox() {
       status: status || undefined,
     });
     setContacts(list);
+    void syncAppBadgeFromServer();
   }
 
   async function openContact(id: string) {
@@ -816,11 +817,12 @@ function Inbox() {
           />
           <div className="wa-filters">
             {[
-              { v: "", l: "Todos" },
+              { v: "active", l: "Atendimento" },
               { v: "waiting", l: "Pendente" },
-              { v: "human", l: "Atendimento" },
+              { v: "human", l: "Em andamento" },
               { v: "awaiting_rating", l: "Avaliação" },
               { v: "closed", l: "Finalizado" },
+              { v: "", l: "Todos" },
             ].map((f) => (
               <button
                 key={f.v || "all"}

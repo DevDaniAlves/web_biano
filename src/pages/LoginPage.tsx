@@ -1,6 +1,6 @@
 import { FormEvent, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { getStoredUser, getToken, setSession } from "../auth";
+import { getStoredUser, getToken, homePathForSession, setSession } from "../auth";
 import { useTheme } from "../store/ThemeContext";
 import { waApi } from "../whatsapp/waApi";
 import "./login.css";
@@ -15,8 +15,7 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   if (existing) {
-    const user = getStoredUser()!;
-    return <Navigate to={user.role === "admin" ? "/admin" : "/atendimento"} replace />;
+    return <Navigate to={homePathForSession()} replace />;
   }
 
   async function onSubmit(e: FormEvent) {
@@ -26,7 +25,7 @@ export default function LoginPage() {
     try {
       const r = await waApi.login(email, password);
       setSession(r.token, r.user);
-      navigate(r.user.role === "admin" ? "/admin" : "/atendimento", { replace: true });
+      navigate(homePathForSession(), { replace: true });
     } catch (err) {
       setError(String((err as Error).message));
     } finally {

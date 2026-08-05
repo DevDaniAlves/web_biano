@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { clearSession, getStoredUser } from "../auth";
 import ChangePasswordDialog from "../components/ChangePasswordDialog";
 import PushPermissionBanner from "../components/PushPermissionBanner";
-import { disablePushNotifications } from "../push";
+import { disablePushNotifications, setAppBadgeCount } from "../push";
 import { useTheme } from "../store/ThemeContext";
 import "./admin.css";
 
@@ -73,10 +73,12 @@ export default function AdminLayout() {
   }, [drawerOpen]);
 
   function logout() {
-    void disablePushNotifications().finally(() => {
-      clearSession();
-      navigate("/login");
-    });
+    void disablePushNotifications()
+      .then(() => setAppBadgeCount(0))
+      .finally(() => {
+        clearSession();
+        navigate("/login");
+      });
   }
 
   const nav = (

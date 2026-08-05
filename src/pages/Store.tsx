@@ -1,4 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
+import { Navigate } from "react-router-dom";
+import { homePathForSession, isStandaloneDisplay } from "../auth";
 import { Header } from "../components/Header";
 import { ProductCard } from "../components/ProductCard";
 import { waApi, type CatalogProduct } from "../whatsapp/waApi";
@@ -38,6 +40,11 @@ export function Store() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (isStandaloneDisplay()) {
+    const dest = homePathForSession();
+    if (dest !== "/") return <Navigate to={dest} replace />;
   }
 
   return (

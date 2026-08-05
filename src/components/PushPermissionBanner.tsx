@@ -10,8 +10,13 @@ export default function PushPermissionBanner({ active }: { active: boolean }) {
   useEffect(() => {
     if (!active) return;
     void enablePushNotifications()
-      .then((r) => setDenied(r === "denied"))
-      .catch(() => {});
+      .then((r) => {
+        console.log("[push] enable resultado:", r);
+        setDenied(r === "denied");
+      })
+      .catch((err) => {
+        console.error("[push] enable erro:", err);
+      });
   }, [active]);
 
   if (!active || !denied || hidden) return null;

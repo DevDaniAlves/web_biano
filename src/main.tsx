@@ -6,7 +6,16 @@ import { ThemeProvider } from "./store/ThemeContext";
 import "./theme.css";
 
 if ("serviceWorker" in navigator) {
-  void navigator.serviceWorker.register("/sw.js");
+  void navigator.serviceWorker
+    .register("/sw.js")
+    .then((reg) => {
+      console.log("[push] SW registrado", { scope: reg.scope, active: Boolean(reg.active) });
+    })
+    .catch((err) => {
+      console.error("[push] SW falhou ao registrar:", err);
+    });
+} else {
+  console.warn("[push] serviceWorker indisponível neste navegador");
 }
 
 createRoot(document.getElementById("root")!).render(

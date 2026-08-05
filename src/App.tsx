@@ -3,6 +3,7 @@ import AdminLayout from "./admin/AdminLayout";
 import { CatalogAdminPage, ConnectPage, ReportsPage } from "./admin/AdminPages";
 import GestorApp from "./gestor/GestorApp";
 import LoginPage, { RequireAuth } from "./pages/LoginPage";
+import PwaStart from "./pages/PwaStart";
 import { Store } from "./pages/Store";
 import WhatsAppPage, { QueuesTab, UsersTab } from "./whatsapp/WhatsAppPage";
 
@@ -10,6 +11,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Store />} />
+      <Route path="/app" element={<PwaStart />} />
       <Route path="/login" element={<LoginPage />} />
       <Route
         path="/atendimento"
