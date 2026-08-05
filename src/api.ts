@@ -103,6 +103,13 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+  resetAutomationRun: () =>
+    request<GestorAutomation>("/gestor/automation/reset-run", { method: "POST" }),
+  runAutomationNow: () =>
+    request<{ ok: boolean; started?: boolean; message: string; automation: GestorAutomation }>(
+      "/gestor/automation/run-now",
+      { method: "POST" }
+    ),
   importCsv: async (file: File) => {
     const form = new FormData();
     form.append("file", file);

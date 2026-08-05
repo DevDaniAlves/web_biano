@@ -47,7 +47,7 @@ export default function GestorApp({ embedded = false }: { embedded?: boolean }) 
   const [autoSaving, setAutoSaving] = useState(false);
   const [filter, setFilter] = useState<BoletoStatus | "all">("all");
   const [busy, setBusy] = useState<
-    "scrape" | "dispatch" | "import" | "reset" | "delete" | null
+    "scrape" | "dispatch" | "import" | "reset" | "delete" | "auto" | null
   >(null);
   const [toast, setToast] = useState<{ text: string; error?: boolean } | null>(null);
   const pollRef = useRef<number | null>(null);
@@ -383,6 +383,64 @@ export default function GestorApp({ embedded = false }: { embedded?: boolean }) 
               )}
             </p>
             <div className="actions auto-extra">
+              <button
+                className="btn btn-primary"
+                disabled={!!busy || autoSaving || auto.lastRunStatus === "running"}
+                onClick={() => {
+                  void (async () => {
+                    setBusy("auto");
+                    setToast(null);
+                    try {
+                      const r = await api.runAutomationNow();
+                      setAuto(r.automation);
+                      setToast({ text: "Automático iniciado — scrape + disparo" });
+                      const poll = window.setInterval(async () => {
+                        try {
+                          const a = await api.getAutomation();
+                          setAuto(a);
+                          if (a.lastRunStatus && a.lastRunStatus !== "running") {
+                            window.clearInterval(poll);
+                            setBusy(null);
+                            setToast({
+                              text: a.lastRunMessage ?? a.lastRunStatus,
+                              error: a.lastRunStatus === "failed",
+                            });
+                            await refresh();
+                          }
+                        } catch {
+                          /* ignore */
+                        }
+                      }, 2500);
+                    } catch (e) {
+                      setBusy(null);
+                      setToast({ text: String((e as Error).message ?? e), error: true });
+                    }
+                  })();
+                }}
+              >
+                {busy === "auto" || auto.lastRunStatus === "running"
+                  ? "Rodando…"
+                  : "Rodar de novo (teste)"}
+              </button>
+              <button
+                className="btn btn-ghost"
+                disabled={!!busy || autoSaving}
+                onClick={() => {
+                  void (async () => {
+                    setAutoSaving(true);
+                    try {
+                      setAuto(await api.resetAutomationRun());
+                      setToast({ text: "Trava do dia removida — o automático pode rodar de novo" });
+                    } catch (e) {
+                      setToast({ text: String((e as Error).message ?? e), error: true });
+                    } finally {
+                      setAutoSaving(false);
+                    }
+                  })();
+                }}
+              >
+                Liberar automático
+              </button>
               <button
                 className="btn btn-ghost"
                 disabled={!!busy}
