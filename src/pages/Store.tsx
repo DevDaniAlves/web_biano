@@ -6,10 +6,40 @@ import { ProductCard } from "../components/ProductCard";
 import { waApi, type CatalogProduct } from "../whatsapp/waApi";
 import "./store.css";
 
+function catalogUrl() {
+  return `${window.location.origin}/`;
+}
+
+function waMeLink(phone: string, text: string) {
+  return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+}
+
+function sellerMessage(keyword: string, productName?: string) {
+  const link = catalogUrl();
+  if (productName) {
+    return [
+      `Olá! Vi o item *${productName}* no catálogo da Calangus Moda Jovem e gostaria de falar com um vendedor.`,
+      "",
+      `Catálogo: ${link}`,
+      "",
+      keyword,
+    ].join("\n");
+  }
+  return [
+    "Olá! Vim pelo catálogo da Calangus Moda Jovem e gostaria de falar com um vendedor.",
+    "Pode me ajudar a escolher uma peça?",
+    "",
+    `Catálogo: ${link}`,
+    "",
+    keyword,
+  ].join("\n");
+}
+
 export function Store() {
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [mode, setMode] = useState<"wa_me" | "form">("wa_me");
-  const [waLink, setWaLink] = useState<string | null>(null);
+  const [waPhone, setWaPhone] = useState<string | null>(null);
+  const [keyword, setKeyword] = useState("catalogo");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
@@ -20,10 +50,14 @@ export function Store() {
   useEffect(() => {
     waApi.catalogConfig().then((c) => {
       setMode(c.mode);
-      setWaLink(c.waLink);
+      setWaPhone(c.phone);
+      if (c.keyword) setKeyword(c.keyword);
     }).catch(() => {});
     waApi.catalogProducts().then(setProducts).catch(() => {});
   }, []);
+
+  const generalWa =
+    waPhone && mode === "wa_me" ? waMeLink(waPhone, sellerMessage(keyword)) : null;
 
   async function onLead(e: FormEvent) {
     e.preventDefault();
@@ -83,13 +117,27 @@ export function Store() {
         <div className="catalog-grid">
           {products.map((p, i) => (
             <div key={p.id} style={{ animationDelay: `${0.04 * i}s` }}>
-              <ProductCard product={p} />
+              <ProductCard
+                product={p}
+                sellerHref={
+                  waPhone && mode === "wa_me"
+                    ? waMeLink(waPhone, sellerMessage(keyword, p.name))
+                    : null
+                }
+              />
             </div>
           ))}
           {products.length === 0 && (
             <p className="catalog-empty">Nenhum item publicado ainda.</p>
           )}
         </div>
+        {generalWa && (
+          <div className="catalog-seller-wrap">
+            <a className="hero-cta" href={generalWa} target="_blank" rel="noreferrer">
+              Falar com um vendedor
+            </a>
+          </div>
+        )}
       </section>
 
       <section id="contato" className="contact-section">
@@ -102,8 +150,8 @@ export function Store() {
           </p>
         </div>
         {mode === "wa_me" ? (
-          waLink ? (
-            <a className="hero-cta" href={waLink} target="_blank" rel="noreferrer">
+          generalWa ? (
+            <a className="hero-cta" href={generalWa} target="_blank" rel="noreferrer">
               Abrir WhatsApp
             </a>
           ) : (

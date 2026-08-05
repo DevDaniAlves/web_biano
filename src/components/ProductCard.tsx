@@ -14,7 +14,13 @@ function money(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export function ProductCard({ product }: { product: StoreProduct }) {
+export function ProductCard({
+  product,
+  sellerHref,
+}: {
+  product: StoreProduct;
+  sellerHref?: string | null;
+}) {
   const img = product.imageUrl || product.image || "";
 
   return (
@@ -29,6 +35,11 @@ export function ProductCard({ product }: { product: StoreProduct }) {
         <div className="product-row">
           <strong>{money(product.price)}</strong>
         </div>
+        {sellerHref && (
+          <a className="product-seller" href={sellerHref} target="_blank" rel="noreferrer">
+            Falar com um vendedor
+          </a>
+        )}
       </div>
     </article>
   );

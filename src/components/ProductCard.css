@@ -95,3 +95,21 @@
 .product-row button:hover {
   filter: brightness(1.08);
 }
+
+.product-seller {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.35rem;
+  padding: 0.58rem 0.8rem;
+  border-radius: 8px;
+  background: var(--red);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.product-seller:hover {
+  filter: brightness(1.08);
+}
