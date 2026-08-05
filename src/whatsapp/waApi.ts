@@ -24,6 +24,7 @@ export interface WaUser {
   name: string;
   email: string;
   role: "admin" | "seller";
+  active?: boolean;
 }
 
 export type ContactStatus = "bot" | "waiting" | "human" | "awaiting_rating" | "closed";
@@ -197,6 +198,16 @@ export const waApi = {
   createUser: (data: { name: string; email: string; password: string; role?: string }) =>
     request<WaUser>("/whatsapp/users", {
       method: "POST",
+      body: JSON.stringify(data),
+    }),
+  setUserActive: (id: string, active: boolean) =>
+    request<WaUser>(`/whatsapp/users/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ active }),
+    }),
+  updateUser: (id: string, data: { name?: string; active?: boolean }) =>
+    request<WaUser>(`/whatsapp/users/${id}`, {
+      method: "PATCH",
       body: JSON.stringify(data),
     }),
   agents: () => request<unknown[]>("/whatsapp/agents"),

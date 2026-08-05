@@ -292,6 +292,8 @@ export function UsersTab() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
   const [slots, setSlots] = useState<
     Array<{ id: string; dayOfWeek: number; startMin: number; endMin: number }>
   >([]);
@@ -355,7 +357,7 @@ export function UsersTab() {
         className="admin-toolbar"
         onSubmit={async (e: FormEvent) => {
           e.preventDefault();
-          await waApi.createUser({ name, email, password, role: "seller" });
+          await waApi.createUser({ name: name.trim(), email, password, role: "seller" });
           setName("");
           setEmail("");
           setPassword("");
@@ -384,6 +386,7 @@ export function UsersTab() {
               <th>Nome</th>
               <th>E-mail</th>
               <th>Perfil</th>
+              <th>Status</th>
               <th />
             </tr>
           </thead>
@@ -391,7 +394,33 @@ export function UsersTab() {
             {users.map((u) => (
               <tr key={u.id}>
                 <td>
-                  <strong>{u.name}</strong>
+                  {editingId === u.id ? (
+                    <form
+                      style={{ display: "flex", gap: 8, alignItems: "center" }}
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void waApi
+                          .updateUser(u.id, { name: editName.trim() })
+                          .then(() => {
+                            setEditingId(null);
+                            return load();
+                          });
+                      }}
+                    >
+                      <input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        required
+                        autoFocus
+                      />
+                      <button type="submit">Salvar</button>
+                      <button type="button" className="ghost" onClick={() => setEditingId(null)}>
+                        Cancelar
+                      </button>
+                    </form>
+                  ) : (
+                    <strong>{u.name}</strong>
+                  )}
                 </td>
                 <td>{u.email}</td>
                 <td>
@@ -400,6 +429,34 @@ export function UsersTab() {
                   </span>
                 </td>
                 <td>
+                  <span className={`admin-pill${u.active === false ? "" : " ok"}`}>
+                    {u.active === false ? "Inativo" : "Ativo"}
+                  </span>
+                </td>
+                <td>
+                  {editingId !== u.id && (
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => {
+                        setEditingId(u.id);
+                        setEditName(u.name);
+                      }}
+                    >
+                      Editar nome
+                    </button>
+                  )}
+                  {u.role !== "admin" && (
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() =>
+                        void waApi.setUserActive(u.id, u.active === false).then(() => load())
+                      }
+                    >
+                      {u.active === false ? "Ativar" : "Desativar"}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="ghost"
@@ -833,7 +890,9 @@ function Inbox() {
               aria-label="Filtrar por vendedor"
             >
               <option value="">Todos os vendedores</option>
-              {sellers.map((s) => (
+              {sellers
+                .filter((s) => s.role === "seller" && s.active !== false)
+                .map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>
