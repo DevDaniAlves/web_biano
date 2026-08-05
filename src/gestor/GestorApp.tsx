@@ -313,7 +313,7 @@ export default function GestorApp({ embedded = false }: { embedded?: boolean }) 
                 <h2>Agenda automática</h2>
                 <p>
                   No horário de Brasília, roda o Playwright e em seguida o disparo WhatsApp — uma vez
-                  por dia.
+                  por dia. Se falhar, defina um horário mais tarde hoje para tentar de novo.
                 </p>
               </div>
             </div>
