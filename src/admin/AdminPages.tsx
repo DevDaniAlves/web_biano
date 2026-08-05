@@ -3,13 +3,22 @@ import { waApi } from "../whatsapp/waApi";
 
 export { ReportsPage } from "./ReportsPage";
 
+function formatPairingCode(code: string) {
+  const clean = code.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  if (clean.length === 8) return `${clean.slice(0, 4)}-${clean.slice(4)}`;
+  return clean || code;
+}
+
 export function ConnectPage() {
   const [instanceName, setInstanceName] = useState("");
+  const [phone, setPhone] = useState("");
   const [info, setInfo] = useState<{
     instanceName: string;
     status: string;
     lastQr: string | null;
+    lastPairingCode?: string | null;
     credentialsOk: boolean;
+    defaultPhone?: string;
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -29,7 +38,8 @@ export function ConnectPage() {
   async function load() {
     const row = await waApi.connection();
     setInfo(row);
-    setInstanceName(row.instanceName);
+    setInstanceName((prev) => prev || row.instanceName);
+    setPhone((prev) => prev || row.defaultPhone || "");
   }
 
   async function loadHook() {
@@ -52,11 +62,14 @@ export function ConnectPage() {
     return () => clearInterval(t);
   }, []);
 
-  async function connect() {
+  async function connect(byCode = false) {
     setBusy(true);
     setError("");
     try {
-      await waApi.connectInstance(instanceName);
+      if (byCode && !phone.replace(/\D/g, "")) {
+        throw new Error("Informe o telefone com DDI e DDD para gerar o código");
+      }
+      await waApi.connectInstance(instanceName, byCode ? phone.replace(/\D/g, "") : undefined);
       await load();
     } catch (e) {
       setError(String((e as Error).message));
@@ -79,6 +92,8 @@ export function ConnectPage() {
 
   const status = (info?.status ?? "").trim().toLowerCase();
   const open = status === "open" || status === "connected";
+  const statusLabel =
+    open ? "conectado" : status === "connecting" ? "conectando" : status === "close" || status === "closed" || status === "disconnected" ? "desconectado" : info?.status || "—";
 
   return (
     <div className="admin-panel">
@@ -95,7 +110,7 @@ export function ConnectPage() {
           Instância{" "}
           <strong>{info.instanceName || "—"}</strong>
           {" · "}
-          <span className={`connect-status${open ? " open" : ""}`}>{info.status}</span>
+          <span className={`connect-status${open ? " open" : ""}`}>{statusLabel}</span>
           {!info.credentialsOk && " · Configure WHATSAPP_API_URL e WHATSAPP_API_KEY"}
         </p>
       )}
@@ -111,13 +126,32 @@ export function ConnectPage() {
           onChange={(e) => setInstanceName(e.target.value)}
           placeholder="Nome da instância"
         />
-        <button type="button" disabled={busy || open || !instanceName.trim()} onClick={() => void connect()}>
+        <input
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="Telefone DDI+DDD (556634016000)"
+          inputMode="tel"
+        />
+        <button type="button" disabled={busy || open || !instanceName.trim()} onClick={() => void connect(false)}>
           Conectar / Gerar QR
+        </button>
+        <button type="button" disabled={busy || open || !instanceName.trim()} onClick={() => void connect(true)}>
+          Gerar código
         </button>
         <button type="button" className="ghost" disabled={busy} onClick={() => void disconnect()}>
           Desconectar
         </button>
       </div>
+      {!open && info?.lastPairingCode && (
+        <div className="admin-pairing">
+          <span>Código para o WhatsApp</span>
+          <strong>{formatPairingCode(info.lastPairingCode)}</strong>
+          <p>
+            No celular: WhatsApp → Aparelhos conectados → Conectar um aparelho →{" "}
+            <em>Conectar com número de telefone</em> → cole este código.
+          </p>
+        </div>
+      )}
       {!open && info?.lastQr && (
         <img
           className="admin-qr"

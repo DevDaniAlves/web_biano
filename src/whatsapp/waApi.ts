@@ -105,6 +105,9 @@ export interface WaMessage {
   type: string;
   body: string | null;
   mediaUrl: string | null;
+  externalId?: string | null;
+  quotedExternalId?: string | null;
+  quotedBody?: string | null;
   createdAt: string;
   sentBy?: { id: string; name: string } | null;
   /** UI: pending = relógio, sent = ✓✓ */
@@ -281,14 +284,19 @@ export const waApi = {
       instanceName: string;
       status: string;
       lastQr: string | null;
+      lastPairingCode?: string | null;
       credentialsOk: boolean;
+      defaultPhone?: string;
       live: unknown;
     }>("/whatsapp/connection"),
-  connectInstance: (instanceName: string) =>
-    request("/whatsapp/connection", {
-      method: "POST",
-      body: JSON.stringify({ instanceName }),
-    }),
+  connectInstance: (instanceName: string, number?: string) =>
+    request<{ lastQr: string | null; lastPairingCode?: string | null; pairingCode?: string | null }>(
+      "/whatsapp/connection",
+      {
+        method: "POST",
+        body: JSON.stringify({ instanceName, number }),
+      }
+    ),
   disconnectInstance: () => request("/whatsapp/connection", { method: "DELETE" }),
   catalogConfig: () =>
     request<{ mode: "wa_me" | "form"; waLink: string | null; keyword: string; phone: string | null }>(

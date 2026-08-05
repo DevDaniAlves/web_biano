@@ -1,21 +1,36 @@
 import { FormEvent, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { getStoredUser, getToken, homePathForSession, setSession } from "../auth";
+import { getStoredUser, getToken, homePathForSession, isStandaloneDisplay, setSession } from "../auth";
+import { enablePushNotifications } from "../push";
 import { useTheme } from "../store/ThemeContext";
 import { waApi } from "../whatsapp/waApi";
 import "./login.css";
+
+function canAskPushNow() {
+  return (
+    typeof window !== "undefined" &&
+    "Notification" in window &&
+    "PushManager" in window &&
+    Notification.permission === "default"
+  );
+}
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
   const existing = getToken() && getStoredUser();
-  const [email, setEmail] = useState("admin@calangus.com");
-  const [password, setPassword] = useState("calangus123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pushStep, setPushStep] = useState(false);
 
-  if (existing) {
+  if (existing && !pushStep) {
     return <Navigate to={homePathForSession()} replace />;
+  }
+
+  function goHome() {
+    navigate(homePathForSession(), { replace: true });
   }
 
   async function onSubmit(e: FormEvent) {
@@ -25,11 +40,25 @@ export default function LoginPage() {
     try {
       const r = await waApi.login(email, password);
       setSession(r.token, r.user);
-      navigate(homePathForSession(), { replace: true });
+      if (canAskPushNow()) {
+        setPushStep(true);
+        return;
+      }
+      goHome();
     } catch (err) {
       setError(String((err as Error).message));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function activatePush() {
+    setBusy(true);
+    try {
+      await enablePushNotifications();
+    } finally {
+      setBusy(false);
+      goHome();
     }
   }
 
@@ -41,27 +70,47 @@ export default function LoginPage() {
       <div className="login-card">
         <img src="/brand/logo-circle.png" alt="" width={72} height={72} />
         <h1>Calangus</h1>
-        <p>Acesso de vendedores e administradores</p>
-        <form onSubmit={onSubmit}>
-          <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="E-mail"
-            autoComplete="username"
-          />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Senha"
-            autoComplete="current-password"
-          />
-          {error && <p className="login-error">{error}</p>}
-          <button type="submit" disabled={busy}>
-            {busy ? "Entrando…" : "Entrar"}
-          </button>
-        </form>
-        <Link to="/">← Catálogo</Link>
+        {pushStep ? (
+          <>
+            <p>Ative as notificações para receber novos atendimentos no iPhone, mesmo com o app fechado.</p>
+            <button type="button" disabled={busy} onClick={() => void activatePush()}>
+              {busy ? "Ativando…" : "Ativar notificações"}
+            </button>
+            <button type="button" className="login-skip" disabled={busy} onClick={goHome}>
+              Agora não
+            </button>
+          </>
+        ) : (
+          <>
+            <p>Acesso de vendedores e administradores</p>
+            <form onSubmit={onSubmit} autoComplete="off">
+              <input
+                name="calangus-user"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="E-mail"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                inputMode="email"
+              />
+              <input
+                name="calangus-pass"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Senha"
+                autoComplete="new-password"
+              />
+              {error && <p className="login-error">{error}</p>}
+              <button type="submit" disabled={busy}>
+                {busy ? "Entrando…" : "Entrar"}
+              </button>
+            </form>
+            {!isStandaloneDisplay() && <Link to="/">← Catálogo</Link>}
+          </>
+        )}
       </div>
     </div>
   );

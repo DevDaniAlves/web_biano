@@ -72,11 +72,19 @@
   margin: 0;
 }
 
-.login-card a {
+.login-card a,
+.login-skip {
   margin-top: 0.4rem;
   color: var(--muted);
   text-decoration: none;
   font-size: 0.88rem;
+}
+
+.login-skip {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 500;
 }
 
 .login-theme {

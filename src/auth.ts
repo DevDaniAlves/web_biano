@@ -31,11 +31,11 @@ export function authHeaders(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-/** Destino do PWA / login: catálogo só se não estiver autenticado. */
+/** Destino do PWA / login: atendimento se logado, senão tela de login. */
 export function homePathForSession() {
   const token = getToken();
   const user = getStoredUser();
-  if (!token || !user) return "/";
+  if (!token || !user) return "/login";
   return user.role === "admin" ? "/admin/whatsapp/conversas" : "/atendimento";
 }
 

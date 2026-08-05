@@ -416,6 +416,36 @@
   border: 1px solid var(--line);
 }
 
+.admin-pairing {
+  margin: 0.85rem 0 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  max-width: 420px;
+}
+
+.admin-pairing span {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted, #888);
+  margin-bottom: 0.35rem;
+}
+
+.admin-pairing strong {
+  display: block;
+  font-size: 1.85rem;
+  letter-spacing: 0.14em;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-pairing p {
+  margin: 0.65rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--muted, #888);
+}
+
 .connect-status {
   display: inline-block;
   padding: 0.15rem 0.5rem;

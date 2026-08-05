@@ -1047,20 +1047,46 @@ function Inbox() {
                 const delivery =
                   m.delivery ??
                   (m.id.startsWith("tmp-") ? "pending" : m.direction === "out" ? "sent" : undefined);
+                const quoted = m.quotedExternalId
+                  ? messages.find((x) => x.externalId && x.externalId === m.quotedExternalId)
+                  : null;
+                const quoteText = quoted?.body || m.quotedBody;
+                const showImage = (m.type === "image" || m.type === "sticker") && m.mediaUrl;
                 return (
                   <div
                     key={m.id}
+                    id={`msg-${m.id}`}
                     className={`bubble ${m.direction}${delivery === "pending" ? " pending" : ""}`}
                   >
-                    {m.type === "image" && m.mediaUrl && (
+                    {quoteText && (
+                      <button
+                        type="button"
+                        className="wa-quote"
+                        onClick={() => {
+                          if (!quoted) return;
+                          const el = document.getElementById(`msg-${quoted.id}`);
+                          if (!el) return;
+                          el.scrollIntoView({ behavior: "smooth", block: "center" });
+                          el.classList.add("flash");
+                          window.setTimeout(() => el.classList.remove("flash"), 1400);
+                        }}
+                      >
+                        <strong>{quoted?.direction === "out" ? "Você" : selected.name || selected.phone}</strong>
+                        <span>{quoteText}</span>
+                      </button>
+                    )}
+                    {showImage && (
                       <a href={mediaSrc(m.mediaUrl) ?? "#"} target="_blank" rel="noreferrer">
                         <img src={mediaSrc(m.mediaUrl) ?? ""} alt="" />
                       </a>
                     )}
-                    {m.body && (
+                    {m.body && m.body !== "[imagem]" && m.body !== "[figurinha]" && (
                       <p>
                         <RichText text={m.body} />
                       </p>
+                    )}
+                    {!showImage && (m.type === "image" || m.type === "sticker") && !m.body && (
+                      <p>[imagem]</p>
                     )}
                     <small>
                       <span>

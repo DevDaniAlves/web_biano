@@ -1,7 +1,8 @@
 {
   "name": "Calangus Moda Jovem",
   "short_name": "Calangus",
-  "description": "Catálogo e atendimento Calangus",
+  "description": "Atendimento Calangus",
+  "id": "/app",
   "start_url": "/app",
   "scope": "/",
   "display": "standalone",
