@@ -17,10 +17,77 @@ import "./whatsapp.css";
 
 function mediaSrc(url: string | null) {
   if (!url) return null;
-  if (url.startsWith("http")) return url;
+  if (url.startsWith("http") || url.startsWith("blob:")) return url;
   const base = import.meta.env.VITE_API_URL ?? "";
   if (base && !base.startsWith("/")) return `${base.replace(/\/$/, "")}${url}`;
   return url.startsWith("/") ? url : `/${url}`;
+}
+
+function formatDuration(sec: number) {
+  if (!Number.isFinite(sec) || sec < 0) return "0:00";
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function AudioBubble({ src }: { src: string }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    const onTime = () => {
+      setProgress(el.currentTime);
+      if (el.duration && Number.isFinite(el.duration)) setDuration(el.duration);
+    };
+    const onMeta = () => {
+      if (el.duration && Number.isFinite(el.duration)) setDuration(el.duration);
+    };
+    const onEnd = () => {
+      setPlaying(false);
+      setProgress(0);
+    };
+    el.addEventListener("timeupdate", onTime);
+    el.addEventListener("loadedmetadata", onMeta);
+    el.addEventListener("ended", onEnd);
+    return () => {
+      el.removeEventListener("timeupdate", onTime);
+      el.removeEventListener("loadedmetadata", onMeta);
+      el.removeEventListener("ended", onEnd);
+    };
+  }, [src]);
+
+  async function toggle() {
+    const el = audioRef.current;
+    if (!el) return;
+    if (playing) {
+      el.pause();
+      setPlaying(false);
+      return;
+    }
+    await el.play().catch(() => {});
+    setPlaying(true);
+  }
+
+  const pct = duration > 0 ? Math.min(100, (progress / duration) * 100) : 0;
+
+  return (
+    <div className="wa-audio-player">
+      <audio ref={audioRef} src={src} preload="metadata" />
+      <button type="button" className="wa-audio-play" onClick={() => void toggle()} aria-label={playing ? "Pausar" : "Ouvir"}>
+        {playing ? "❚❚" : "▶"}
+      </button>
+      <div className="wa-audio-track">
+        <div className="wa-audio-bar">
+          <i style={{ width: `${pct}%` }} />
+        </div>
+        <span>{formatDuration(progress)} / {formatDuration(duration)}</span>
+      </div>
+    </div>
+  );
 }
 
 function badgeMeta(status: ContactStatus, webhookPaused?: boolean) {
@@ -663,11 +730,15 @@ function Inbox() {
   const [busy, setBusy] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [recording, setRecording] = useState(false);
   const [error, setError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   /** Trava síncrona — evita Enter/clique duplo antes do setState. */
   const sendingRef = useRef(false);
+  const recRef = useRef<MediaRecorder | null>(null);
+  const recStreamRef = useRef<MediaStream | null>(null);
+  const recCancelRef = useRef(false);
 
   const selected = useMemo(
     () => contacts.find((c) => c.id === selectedId) ?? selectedFlags,
@@ -688,6 +759,11 @@ function Inbox() {
     setError("");
     setSelectedId(id);
     setAttachOpen(false);
+    if (recording || recRef.current) {
+      recCancelRef.current = true;
+      recRef.current?.stop();
+      setRecording(false);
+    }
     try {
       const r = await waApi.messages(id, { peek: user?.role === "admin" });
       setMessages(
@@ -804,21 +880,29 @@ function Inbox() {
     }
   }
 
-  async function sendImage(file: File) {
+  function mediaKindOf(file: File): "image" | "audio" | "video" | "document" {
+    if (file.type.startsWith("image/")) return "image";
+    if (file.type.startsWith("audio/")) return "audio";
+    if (file.type.startsWith("video/")) return "video";
+    return "document";
+  }
+
+  async function sendMediaFile(file: File) {
     if (!selectedId || readOnly || sendingRef.current) return;
     sendingRef.current = true;
     setAttachOpen(false);
     setBusy(true);
     setError("");
-    const caption = text.trim() || undefined;
-    const tempId = `tmp-img-${Date.now()}`;
+    const kind = mediaKindOf(file);
+    const caption = kind === "audio" ? undefined : text.trim() || undefined;
+    const tempId = `tmp-media-${Date.now()}`;
     const localUrl = URL.createObjectURL(file);
     const optimistic: WaMessage = {
       id: tempId,
       contactId: selectedId,
       direction: "out",
-      type: "image",
-      body: caption ?? null,
+      type: kind,
+      body: caption ?? (kind === "audio" ? "[áudio]" : kind === "video" ? "[vídeo]" : kind === "document" ? file.name : null),
       mediaUrl: localUrl,
       createdAt: new Date().toISOString(),
       sentBy: user ? { id: user.id, name: user.name } : null,
@@ -827,8 +911,8 @@ function Inbox() {
     setText("");
     setMessages((prev) => [...prev, optimistic]);
     try {
-      const compressed = await compressImage(file);
-      const msg = await waApi.sendImage(selectedId, compressed, caption);
+      const toSend = kind === "image" ? await compressImage(file) : file;
+      const msg = await waApi.sendImage(selectedId, toSend, caption);
       setMessages((prev) => {
         const next = prev.filter((m) => {
           if (m.id === tempId) {
@@ -848,6 +932,55 @@ function Inbox() {
     } finally {
       sendingRef.current = false;
       setBusy(false);
+    }
+  }
+
+  function stopRecStream() {
+    recStreamRef.current?.getTracks().forEach((t) => t.stop());
+    recStreamRef.current = null;
+    recRef.current = null;
+  }
+
+  async function toggleRecord() {
+    if (recording) {
+      recRef.current?.stop();
+      setRecording(false);
+      return;
+    }
+    if (readOnly || busy || sendingRef.current) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recStreamRef.current = stream;
+      const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/mp4")
+          ? "audio/mp4"
+          : "";
+      const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      rec.ondataavailable = (e) => {
+        if (e.data.size) chunks.push(e.data);
+      };
+      rec.onstop = () => {
+        stopRecStream();
+        if (recCancelRef.current) {
+          recCancelRef.current = false;
+          return;
+        }
+        const type = rec.mimeType || "audio/webm";
+        const ext = type.includes("mp4") ? "m4a" : "webm";
+        const blob = new Blob(chunks, { type });
+        if (blob.size < 200) return;
+        const file = new File([blob], `audio-${Date.now()}.${ext}`, { type });
+        void sendMediaFile(file);
+      };
+      rec.start();
+      recRef.current = rec;
+      setRecording(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Não foi possível gravar o áudio");
+      stopRecStream();
+      setRecording(false);
     }
   }
 
@@ -1048,19 +1181,37 @@ function Inbox() {
                   m.delivery ??
                   (m.id.startsWith("tmp-") ? "pending" : m.direction === "out" ? "sent" : undefined);
                 const quoted = m.quotedExternalId
-                  ? messages.find((x) => x.externalId && x.externalId === m.quotedExternalId)
+                  ? messages.find((x) => {
+                      if (!x.externalId && x.id !== m.quotedExternalId) return false;
+                      if (x.id === m.quotedExternalId) return true;
+                      const a = x.externalId || "";
+                      const b = m.quotedExternalId || "";
+                      return a === b || (a && b && (a.endsWith(b) || b.endsWith(a)));
+                    }) ?? null
                   : null;
                 const quoteText = quoted?.body || m.quotedBody;
                 const src = mediaSrc(m.mediaUrl);
+                const quotedSrc = mediaSrc(quoted?.mediaUrl ?? null);
                 const showImage = (m.type === "image" || m.type === "sticker") && src;
+                const showQuote = Boolean(quoteText || quoted);
                 const placeholderBodies = new Set(["[imagem]", "[figurinha]", "[áudio]", "[vídeo]", "[documento]"]);
+                const quoteLabel = quoteText
+                  || (quoted?.type === "image" || quoted?.type === "sticker"
+                    ? "[imagem]"
+                    : quoted?.type === "audio"
+                      ? "[áudio]"
+                      : quoted?.type === "video"
+                        ? "[vídeo]"
+                        : quoted?.type === "document"
+                          ? "[documento]"
+                          : "");
                 return (
                   <div
                     key={m.id}
                     id={`msg-${m.id}`}
                     className={`bubble ${m.direction}${delivery === "pending" ? " pending" : ""}`}
                   >
-                    {quoteText && (
+                    {showQuote && (
                       <button
                         type="button"
                         className="wa-quote"
@@ -1073,8 +1224,19 @@ function Inbox() {
                           window.setTimeout(() => el.classList.remove("flash"), 1400);
                         }}
                       >
-                        <strong>{quoted?.direction === "out" ? "Você" : selected.name || selected.phone}</strong>
-                        <span>{quoteText}</span>
+                        <div className="wa-quote-body">
+                          <strong>
+                            {quoted?.direction === "out"
+                              ? quoted.sentBy?.name || "Você"
+                              : quoted
+                                ? selected.name || selected.phone
+                                : selected.name || selected.phone}
+                          </strong>
+                          <span>{quoteLabel}</span>
+                        </div>
+                        {quotedSrc && (quoted?.type === "image" || quoted?.type === "sticker") && (
+                          <img className="wa-quote-thumb" src={quotedSrc} alt="" />
+                        )}
                       </button>
                     )}
                     {showImage && (
@@ -1082,7 +1244,7 @@ function Inbox() {
                         <img src={src ?? ""} alt="" />
                       </a>
                     )}
-                    {m.type === "audio" && src && <audio className="wa-audio" controls src={src} preload="metadata" />}
+                    {m.type === "audio" && src && <AudioBubble src={src} />}
                     {m.type === "video" && src && (
                       <video className="wa-video" controls src={src} preload="metadata" />
                     )}
@@ -1137,7 +1299,7 @@ function Inbox() {
                           galleryRef.current?.click();
                         }}
                       >
-                        Galeria / arquivo
+                        Foto, vídeo ou arquivo
                       </button>
                       <button
                         type="button"
@@ -1154,19 +1316,19 @@ function Inbox() {
                 <input
                   ref={galleryRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ogg,.webm,.mp4,.mp3,.m4a"
                   hidden
                   onChange={(e) => {
                     const f = e.target.files?.[0];
-                    if (f) void sendImage(f);
+                    if (f) void sendMediaFile(f);
                     e.target.value = "";
                   }}
                 />
                 <textarea
                   rows={1}
-                  placeholder={busy ? "Enviando…" : "Mensagem"}
+                  placeholder={recording ? "Gravando áudio…" : busy ? "Enviando…" : "Mensagem"}
                   value={text}
-                  disabled={busy}
+                  disabled={busy || recording}
                   onChange={(e) => setText(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
@@ -1175,9 +1337,30 @@ function Inbox() {
                     }
                   }}
                 />
-                <button type="button" disabled={busy || !text.trim()} onClick={() => void send()}>
-                  {busy ? "…" : "Enviar"}
-                </button>
+                {text.trim() ? (
+                  <button type="button" disabled={busy} onClick={() => void send()}>
+                    {busy ? "…" : "Enviar"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={`wa-mic${recording ? " rec" : ""}`}
+                    disabled={busy}
+                    onClick={() => void toggleRecord()}
+                    aria-label={recording ? "Parar e enviar áudio" : "Gravar áudio"}
+                  >
+                    {recording ? (
+                      <span className="wa-mic-stop" />
+                    ) : (
+                      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
+                        <path
+                          fill="currentColor"
+                          d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V20H9v2h6v-2h-2v-2.08A7 7 0 0 0 19 11h-2z"
+                        />
+                      </svg>
+                    )}
+                  </button>
+                )}
               </div>
             )}
             {cameraOpen && (
@@ -1185,7 +1368,7 @@ function Inbox() {
                 onClose={() => setCameraOpen(false)}
                 onCapture={(file) => {
                   setCameraOpen(false);
-                  void sendImage(file);
+                  void sendMediaFile(file);
                 }}
               />
             )}
