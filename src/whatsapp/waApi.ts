@@ -183,6 +183,11 @@ export const waApi = {
       method: "POST",
       body: JSON.stringify({ contactId }),
     }),
+  restartBot: (contactId: string) =>
+    request<WaContact>("/whatsapp/contacts/restart-bot", {
+      method: "POST",
+      body: JSON.stringify({ contactId }),
+    }),
   warnInactivity: (contactId: string) =>
     request("/whatsapp/contacts/inactivity-warn", {
       method: "POST",

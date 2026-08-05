@@ -855,6 +855,21 @@ function Inbox() {
     await refreshContacts();
   }
 
+  async function restartBot() {
+    if (!selectedId) return;
+    if (!confirm("Reiniciar este cliente no menu do bot?")) return;
+    setBusy(true);
+    try {
+      await waApi.restartBot(selectedId);
+      await refreshMessages(selectedId, true);
+      await refreshContacts();
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function warnIdle() {
     if (!selectedId) return;
     setBusy(true);
@@ -971,6 +986,11 @@ function Inbox() {
                 </span>
               </div>
               <div className="wa-actions">
+                {user?.role === "admin" && (
+                  <button type="button" className="ghost" disabled={busy} onClick={() => void restartBot()}>
+                    Reiniciar no bot
+                  </button>
+                )}
                 {flags?.canWarnInactivity && !readOnly && (
                   <button type="button" className="ghost" onClick={() => void warnIdle()}>
                     Avisar inatividade
