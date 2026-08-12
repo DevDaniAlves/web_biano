@@ -40,6 +40,15 @@ export function ReportsPage() {
   const [month, setMonth] = useState(currentMonthValue());
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [usage, setUsage] = useState<{
+    total: number;
+    billable: number;
+    estimatedBrl: number;
+    rateBrlPerMsg: number;
+    bySource: Record<string, number>;
+    byCategory: Record<string, number>;
+    note: string;
+  } | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -52,6 +61,11 @@ export function ReportsPage() {
             ? { preset: "month", month }
             : { preset };
       setData(await waApi.reports(params));
+      try {
+        setUsage(await waApi.usage());
+      } catch {
+        setUsage(null);
+      }
     } catch (e) {
       setError(String((e as Error).message));
     } finally {
@@ -250,6 +264,43 @@ export function ReportsPage() {
               <strong>{data.messagesInPeriod ?? data.messagesToday}</strong>
             </article>
           </div>
+
+          {usage && (
+            <>
+              <h2 style={{ marginTop: "1.25rem" }}>Custo WhatsApp (Meta · previsão out/2026)</h2>
+              <div className="admin-stats">
+                <article>
+                  <span>Enviadas (log)</span>
+                  <strong>{usage.total}</strong>
+                </article>
+                <article>
+                  <span>Faturáveis</span>
+                  <strong>{usage.billable}</strong>
+                </article>
+                <article>
+                  <span>Estimativa R$</span>
+                  <strong>
+                    {usage.estimatedBrl.toLocaleString("pt-BR", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </strong>
+                  <small style={{ color: "var(--muted)" }}>
+                    × R$ {usage.rateBrlPerMsg.toFixed(2)}/msg
+                  </small>
+                </article>
+                <article>
+                  <span>Por origem</span>
+                  <strong style={{ fontSize: "0.95rem" }}>
+                    {Object.entries(usage.bySource)
+                      .map(([k, v]) => `${k}:${v}`)
+                      .join(" · ") || "—"}
+                  </strong>
+                </article>
+              </div>
+              <p className="lede">{usage.note}</p>
+            </>
+          )}
 
           <div className="report-charts">
             <div className="report-chart">

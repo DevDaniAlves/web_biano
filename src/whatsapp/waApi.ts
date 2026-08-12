@@ -307,6 +307,54 @@ export const waApi = {
       }
     ),
   disconnectInstance: () => request("/whatsapp/connection", { method: "DELETE" }),
+  metaStatus: () =>
+    request<{
+      provider: "meta" | "evolution";
+      configured: boolean;
+      hasAccessToken: boolean;
+      phoneNumberId: string | null;
+      wabaId: string | null;
+      appId: string | null;
+      embeddedConfigId: string | null;
+      embeddedSignupUrl: string | null;
+      webhookPath: string;
+      boletoTemplate: string | null;
+    }>("/whatsapp/meta/status"),
+  setMetaProvider: (provider: "meta" | "evolution") =>
+    request<{ ok: boolean; provider: string }>("/whatsapp/meta/provider", {
+      method: "POST",
+      body: JSON.stringify({ provider }),
+    }),
+  metaExchange: (data: { code: string; phoneNumberId?: string; wabaId?: string }) =>
+    request<{
+      ok: boolean;
+      error?: string;
+      hint?: string;
+      tokenPreview?: string | null;
+      savedIds?: boolean;
+    }>("/whatsapp/meta/exchange", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  usage: (params?: { from?: string; to?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
+    const qs = q.toString();
+    return request<{
+      from: string;
+      to: string;
+      total: number;
+      billable: number;
+      estimatedBrl: number;
+      rateBrlPerMsg: number;
+      bySource: Record<string, number>;
+      byCategory: Record<string, number>;
+      byProvider: Record<string, number>;
+      byStatus: Record<string, number>;
+      note: string;
+    }>(`/whatsapp/usage${qs ? `?${qs}` : ""}`);
+  },
   catalogConfig: () =>
     request<{ mode: "wa_me" | "form"; waLink: string | null; keyword: string; phone: string | null }>(
       "/catalog/config"

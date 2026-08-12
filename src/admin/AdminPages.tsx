@@ -22,6 +22,19 @@ export function ConnectPage() {
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [metaBusy, setMetaBusy] = useState(false);
+  const [metaInfo, setMetaInfo] = useState<{
+    provider: "meta" | "evolution";
+    configured: boolean;
+    hasAccessToken: boolean;
+    phoneNumberId: string | null;
+    wabaId: string | null;
+    appId: string | null;
+    embeddedConfigId: string | null;
+    embeddedSignupUrl: string | null;
+    webhookPath: string;
+    boletoTemplate: string | null;
+  } | null>(null);
   const [hookStatus, setHookStatus] = useState<{
     hits: number;
     lastHitAt: string | null;
@@ -42,6 +55,10 @@ export function ConnectPage() {
     setPhone((prev) => prev || row.defaultPhone || "");
   }
 
+  async function loadMeta() {
+    setMetaInfo(await waApi.metaStatus());
+  }
+
   async function loadHook() {
     try {
       const API = import.meta.env.VITE_API_URL ?? "/api";
@@ -54,9 +71,11 @@ export function ConnectPage() {
 
   useEffect(() => {
     load().catch((e) => setError(String(e.message)));
+    loadMeta().catch(() => {});
     loadHook().catch(() => {});
     const t = setInterval(() => {
       load().catch(() => {});
+      loadMeta().catch(() => {});
       loadHook().catch(() => {});
     }, 5000);
     return () => clearInterval(t);
@@ -90,19 +109,86 @@ export function ConnectPage() {
     }
   }
 
+  async function setProvider(provider: "meta" | "evolution") {
+    setMetaBusy(true);
+    setError("");
+    try {
+      await waApi.setMetaProvider(provider);
+      await loadMeta();
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setMetaBusy(false);
+    }
+  }
+
   const status = (info?.status ?? "").trim().toLowerCase();
   const open = status === "open" || status === "connected";
   const statusLabel =
     open ? "conectado" : status === "connecting" ? "conectando" : status === "close" || status === "closed" || status === "disconnected" ? "desconectado" : info?.status || "—";
+  const provider = metaInfo?.provider ?? "evolution";
 
   return (
     <div className="admin-panel">
       <div className="admin-panel-head">
         <h1>Conectar WhatsApp</h1>
       </div>
+
+      <h2>Meta Cloud API</h2>
       <p className="lede">
-        Credenciais da Evolution ficam no .env. A instância abaixo é a que o sistema usa para enviar
-        e receber mensagens.
+        Canal oficial (templates, webhook Graph). Provider ativo:{" "}
+        <strong>{provider === "meta" ? "Meta" : "Evolution"}</strong>
+        {metaInfo?.configured ? " · credenciais OK" : " · configure token/Phone Number ID no .env"}
+      </p>
+      {metaInfo && (
+        <p>
+          Phone Number ID: <code>{metaInfo.phoneNumberId || "—"}</code>
+          {" · "}
+          WABA: <code>{metaInfo.wabaId || "—"}</code>
+          {" · "}
+          Template boleto: <code>{metaInfo.boletoTemplate || "—"}</code>
+        </p>
+      )}
+      <div className="admin-toolbar">
+        <button
+          type="button"
+          disabled={metaBusy || !metaInfo?.embeddedSignupUrl}
+          onClick={() => {
+            if (metaInfo?.embeddedSignupUrl) window.open(metaInfo.embeddedSignupUrl, "_blank");
+          }}
+        >
+          Abrir cadastro Meta
+        </button>
+        <button
+          type="button"
+          disabled={metaBusy || !metaInfo?.configured || provider === "meta"}
+          onClick={() => void setProvider("meta")}
+        >
+          Usar Meta
+        </button>
+        <button
+          type="button"
+          className="ghost"
+          disabled={metaBusy || provider === "evolution"}
+          onClick={() => void setProvider("evolution")}
+        >
+          Usar Evolution
+        </button>
+      </div>
+      {!metaInfo?.embeddedSignupUrl && (
+        <p className="admin-hint-ok">
+          Para o botão de cadastro: defina <code>META_APP_ID</code> e{" "}
+          <code>META_EMBEDDED_CONFIG_ID</code> no .env da API.
+        </p>
+      )}
+      <p className="lede">
+        Webhook Meta: <code>{metaInfo?.webhookPath || "/whatsapp/webhook/meta"}</code>
+      </p>
+
+      <h2 style={{ marginTop: "1.5rem" }}>Evolution (QR)</h2>
+      <p className="lede">
+        Credenciais da Evolution ficam no .env. A instância abaixo é usada quando o provider é
+        Evolution.
       </p>
       {error && <p className="admin-error">{error}</p>}
       {info && (
@@ -162,8 +248,8 @@ export function ConnectPage() {
 
       <h2 style={{ marginTop: "1.5rem" }}>Validar ngrok / webhook</h2>
       <p className="lede">
-        Com o ngrok ligado, abra <code>/webhook/ping</code> na URL pública. Se aparecer abaixo, o
-        túnel está ok. Webhook da Evolution: <code>/whatsapp/webhook/evolution</code>
+        Com o ngrok ligado, abra <code>/webhook/ping</code> na URL pública. Webhooks:{" "}
+        <code>/whatsapp/webhook/evolution</code> e <code>/whatsapp/webhook/meta</code>
       </p>
       <p>
         Hits: <strong>{hookStatus?.hits ?? 0}</strong>

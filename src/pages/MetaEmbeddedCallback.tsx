@@ -1,5 +1,7 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { getToken } from "../auth";
+import { waApi } from "../whatsapp/waApi";
 
 /** Redirect OAuth do Cadastro incorporado Meta (CoEx / Business App). */
 export default function MetaEmbeddedCallback() {
@@ -7,6 +9,28 @@ export default function MetaEmbeddedCallback() {
   const entries = useMemo(() => [...params.entries()], [params]);
   const error = params.get("error") || params.get("error_message") || params.get("error_description");
   const code = params.get("code");
+  const phoneNumberId =
+    params.get("phone_number_id") || params.get("phoneNumberId") || undefined;
+  const wabaId = params.get("waba_id") || params.get("wabaId") || undefined;
+  const [exchangeMsg, setExchangeMsg] = useState("");
+
+  useEffect(() => {
+    if (!code || error || !getToken()) return;
+    waApi
+      .metaExchange({
+        code,
+        phoneNumberId,
+        wabaId,
+      })
+      .then((r) => {
+        setExchangeMsg(
+          r.ok
+            ? r.hint || "Code processado. Confirme META_ACCESS_TOKEN no .env se necessário."
+            : r.error || r.hint || "Falha ao trocar code"
+        );
+      })
+      .catch((e) => setExchangeMsg(String((e as Error).message)));
+  }, [code, error, phoneNumberId, wabaId]);
 
   return (
     <main
@@ -22,8 +46,7 @@ export default function MetaEmbeddedCallback() {
         {error ? "Cadastro Meta — erro" : "Cadastro Meta — retorno OK"}
       </h1>
       <p style={{ color: "#444", lineHeight: 1.5 }}>
-        Callback do cadastro incorporado (WhatsApp Business App → Cloud API). Guarde os dados abaixo
-        para configurar o BIANO.
+        Callback do cadastro incorporado (WhatsApp Business App → Cloud API).
       </p>
 
       {error ? (
@@ -48,8 +71,10 @@ export default function MetaEmbeddedCallback() {
             marginTop: "1rem",
           }}
         >
-          <strong>Code recebido.</strong> Próximo passo: trocar por token permanente (usuário do
-          sistema / Graph API).
+          <strong>Code recebido.</strong>{" "}
+          {getToken()
+            ? exchangeMsg || "Processando exchange…"
+            : "Faça login no admin e abra Conectar para ativar o provider Meta. Cole META_ACCESS_TOKEN (system user) no .env."}
         </div>
       ) : (
         <div
