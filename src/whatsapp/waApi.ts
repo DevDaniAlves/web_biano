@@ -318,8 +318,44 @@ export const waApi = {
       embeddedConfigId: string | null;
       embeddedSignupUrl: string | null;
       webhookPath: string;
+      webhookUrl?: string | null;
       boletoTemplate: string | null;
+      boletoTemplateLang?: string | null;
     }>("/whatsapp/meta/status"),
+  metaTemplates: () =>
+    request<{
+      templates: {
+        id: string;
+        name: string;
+        status: string;
+        language: string;
+        category: string;
+        rejectedReason?: string | null;
+      }[];
+      defaultBoleto: {
+        name: string;
+        language: string;
+        category: string;
+        bodyText: string;
+        bodyExamples: string[];
+      };
+    }>("/whatsapp/meta/templates"),
+  createMetaTemplate: (data: {
+    name: string;
+    language?: string;
+    category?: string;
+    bodyText: string;
+    bodyExamples?: string[];
+    replaceExisting?: boolean;
+  }) =>
+    request<{ ok: boolean; data?: unknown; error?: string }>("/whatsapp/meta/templates", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  deleteMetaTemplate: (name: string) =>
+    request<{ ok: boolean }>("/whatsapp/meta/templates/" + encodeURIComponent(name), {
+      method: "DELETE",
+    }),
   setMetaProvider: (provider: "meta" | "evolution") =>
     request<{ ok: boolean; provider: string }>("/whatsapp/meta/provider", {
       method: "POST",

@@ -33,6 +33,8 @@ export function ConnectPage() {
     embeddedConfigId: string | null;
     embeddedSignupUrl: string | null;
     webhookPath: string;
+    webhookUrl?: string | null;
+    webhookVerifyTokenSet?: boolean;
     boletoTemplate: string | null;
   } | null>(null);
   const [hookStatus, setHookStatus] = useState<{
@@ -48,6 +50,22 @@ export function ConnectPage() {
     }[];
   } | null>(null);
 
+  const [tplBusy, setTplBusy] = useState(false);
+  const [templates, setTemplates] = useState<
+    {
+      id: string;
+      name: string;
+      status: string;
+      language: string;
+      category: string;
+      rejectedReason?: string | null;
+    }[]
+  >([]);
+  const [tplName, setTplName] = useState("boleto_lembrete");
+  const [tplLang, setTplLang] = useState("pt_BR");
+  const [tplBody, setTplBody] = useState("");
+  const [tplMsg, setTplMsg] = useState("");
+
   async function load() {
     const row = await waApi.connection();
     setInfo(row);
@@ -57,6 +75,20 @@ export function ConnectPage() {
 
   async function loadMeta() {
     setMetaInfo(await waApi.metaStatus());
+  }
+
+  async function loadTemplates() {
+    try {
+      const r = await waApi.metaTemplates();
+      setTemplates(r.templates);
+      if (!tplBody && r.defaultBoleto?.bodyText) {
+        setTplBody(r.defaultBoleto.bodyText);
+        setTplName(r.defaultBoleto.name || "boleto_lembrete");
+        setTplLang(r.defaultBoleto.language || "pt_BR");
+      }
+    } catch (e) {
+      setTplMsg(String((e as Error).message));
+    }
   }
 
   async function loadHook() {
@@ -72,6 +104,7 @@ export function ConnectPage() {
   useEffect(() => {
     load().catch((e) => setError(String(e.message)));
     loadMeta().catch(() => {});
+    loadTemplates().catch(() => {});
     loadHook().catch(() => {});
     const t = setInterval(() => {
       load().catch(() => {});
@@ -80,6 +113,47 @@ export function ConnectPage() {
     }, 5000);
     return () => clearInterval(t);
   }, []);
+
+  async function saveTemplate(replaceExisting: boolean) {
+    setTplBusy(true);
+    setTplMsg("");
+    setError("");
+    try {
+      await waApi.createMetaTemplate({
+        name: tplName,
+        language: tplLang,
+        category: "UTILITY",
+        bodyText: tplBody,
+        bodyExamples: ["Maria", "129,90", "20/08/2026", "https://calangusmoda.crediario.digital/login"],
+        replaceExisting,
+      });
+      setTplMsg(
+        replaceExisting
+          ? "Template recriado e enviado para análise da Meta."
+          : "Template criado e enviado para análise da Meta."
+      );
+      await loadTemplates();
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setTplBusy(false);
+    }
+  }
+
+  async function removeTemplate(name: string) {
+    if (!window.confirm(`Excluir template "${name}" na Meta?`)) return;
+    setTplBusy(true);
+    setTplMsg("");
+    try {
+      await waApi.deleteMetaTemplate(name);
+      setTplMsg(`Template ${name} excluído.`);
+      await loadTemplates();
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setTplBusy(false);
+    }
+  }
 
   async function connect(byCode = false) {
     setBusy(true);
@@ -182,8 +256,123 @@ export function ConnectPage() {
         </p>
       )}
       <p className="lede">
-        Webhook Meta: <code>{metaInfo?.webhookPath || "/whatsapp/webhook/meta"}</code>
+        Callback URL na Meta (obrigatório HTTPS):{" "}
+        <code>
+          {metaInfo?.webhookUrl ||
+            "https://apibiano-production.up.railway.app/whatsapp/webhook/meta"}
+        </code>
       </p>
+      <p className="admin-hint-ok">
+        Em Developers → WhatsApp → Configuração → Webhook: cole essa URL, verify token ={" "}
+        <code>META_WEBHOOK_VERIFY_TOKEN</code> do Railway, assine o campo <code>messages</code>.
+        O painel da Meta pode listar eventos mesmo quando a entrega à sua API falha — Hits abaixo
+        só sobem se o POST chegar aqui.
+      </p>
+
+      <h2 style={{ marginTop: "1.5rem" }}>Templates Meta (boleto)</h2>
+      <p className="lede">
+        Criar/recriar templates Utility na WABA (ex.: <code>boleto_lembrete</code>). Use variáveis{" "}
+        <code>{"{{1}}"}…{"{{4}}"}</code> = nome, valor, vencimento, link. Template aprovado não
+        edita in-place — “Recriar” apaga e envia de novo (volta para análise).
+      </p>
+      {tplMsg && <p className="admin-hint-ok">{tplMsg}</p>}
+      <div className="admin-toolbar" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
+        <input
+          value={tplName}
+          onChange={(e) => setTplName(e.target.value)}
+          placeholder="nome_template"
+          style={{ maxWidth: "12rem" }}
+        />
+        <input
+          value={tplLang}
+          onChange={(e) => setTplLang(e.target.value)}
+          placeholder="pt_BR"
+          style={{ maxWidth: "6rem" }}
+        />
+        <button type="button" className="ghost" disabled={tplBusy} onClick={() => void loadTemplates()}>
+          Atualizar lista
+        </button>
+      </div>
+      <textarea
+        value={tplBody}
+        onChange={(e) => setTplBody(e.target.value)}
+        rows={8}
+        style={{ width: "100%", marginTop: "0.5rem", fontFamily: "inherit" }}
+        placeholder="Corpo do template com {{1}} {{2}} {{3}} {{4}}"
+      />
+      <div className="admin-toolbar" style={{ marginTop: "0.5rem" }}>
+        <button
+          type="button"
+          disabled={tplBusy || !tplName.trim() || !tplBody.trim()}
+          onClick={() => void saveTemplate(false)}
+        >
+          Criar template
+        </button>
+        <button
+          type="button"
+          className="ghost"
+          disabled={tplBusy || !tplName.trim() || !tplBody.trim()}
+          onClick={() => {
+            if (
+              window.confirm(
+                "Recriar apaga o template com esse nome na Meta e cria de novo (precisa nova aprovação). Continuar?"
+              )
+            ) {
+              void saveTemplate(true);
+            }
+          }}
+        >
+          Recriar (editar)
+        </button>
+      </div>
+      {templates.length > 0 && (
+        <table className="admin-table" style={{ marginTop: "1rem", width: "100%" }}>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Idioma</th>
+              <th>Categoria</th>
+              <th>Status</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {templates.map((t) => (
+              <tr key={`${t.id}-${t.language}`}>
+                <td>
+                  <button
+                    type="button"
+                    className="ghost"
+                    style={{ padding: 0 }}
+                    onClick={() => {
+                      setTplName(t.name);
+                      setTplLang(t.language || "pt_BR");
+                    }}
+                  >
+                    {t.name}
+                  </button>
+                </td>
+                <td>{t.language}</td>
+                <td>{t.category}</td>
+                <td>
+                  {t.status}
+                  {t.rejectedReason ? ` (${t.rejectedReason})` : ""}
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    className="ghost"
+                    disabled={tplBusy}
+                    onClick={() => void removeTemplate(t.name)}
+                  >
+                    Excluir
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
 
       <h2 style={{ marginTop: "1.5rem" }}>Evolution (QR)</h2>
       <p className="lede">
@@ -246,10 +435,12 @@ export function ConnectPage() {
         />
       )}
 
-      <h2 style={{ marginTop: "1.5rem" }}>Validar ngrok / webhook</h2>
+      <h2 style={{ marginTop: "1.5rem" }}>Validar webhook</h2>
       <p className="lede">
-        Com o ngrok ligado, abra <code>/webhook/ping</code> na URL pública. Webhooks:{" "}
-        <code>/whatsapp/webhook/evolution</code> e <code>/whatsapp/webhook/meta</code>
+        Meta (produção):{" "}
+        <code>https://apibiano-production.up.railway.app/whatsapp/webhook/meta</code>
+        . Evolution/local: <code>/webhook/ping</code> no ngrok. Se Hits ficar 0 com a Meta
+        mostrando “Carga”, a Callback URL na Meta está errada ou a entrega falhou.
       </p>
       <p>
         Hits: <strong>{hookStatus?.hits ?? 0}</strong>
