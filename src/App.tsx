@@ -4,6 +4,7 @@ import { CatalogAdminPage, ConnectPage, ReportsPage } from "./admin/AdminPages";
 import GestorApp from "./gestor/GestorApp";
 import LoginPage, { RequireAuth } from "./pages/LoginPage";
 import MetaEmbeddedCallback from "./pages/MetaEmbeddedCallback";
+import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import PwaStart from "./pages/PwaStart";
 import { Store } from "./pages/Store";
 import WhatsAppPage, { QueuesTab, UsersTab } from "./whatsapp/WhatsAppPage";
@@ -12,6 +13,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Store />} />
+      <Route path="/privacidade" element={<PrivacyPolicyPage />} />
+      <Route path="/privacy" element={<PrivacyPolicyPage />} />
       <Route path="/app" element={<PwaStart />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/whatsapp/meta/callback" element={<MetaEmbeddedCallback />} />
