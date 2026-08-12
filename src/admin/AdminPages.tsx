@@ -271,9 +271,11 @@ export function ConnectPage() {
 
       <h2 style={{ marginTop: "1.5rem" }}>Templates Meta (boleto)</h2>
       <p className="lede">
-        Criar/recriar templates Utility na WABA (ex.: <code>boleto_lembrete</code>). Use variáveis{" "}
-        <code>{"{{1}}"}…{"{{4}}"}</code> = nome, valor, vencimento, link. Template aprovado não
-        edita in-place — “Recriar” apaga e envia de novo (volta para análise).
+        Criar/recriar templates Utility na WABA (ex.: <code>boleto_lembrete</code>). Variáveis
+        posicionais: <code>{"{{1}}"}</code> nome, <code>{"{{2}}"}</code> valor,{" "}
+        <code>{"{{3}}"}</code> vencimento, <code>{"{{4}}"}</code> link. Texto precisa ser longo o
+        bastante (Meta rejeita muitas variáveis em frase curta). Template aprovado não edita
+        in-place — “Recriar” apaga e envia de novo.
       </p>
       {tplMsg && <p className="admin-hint-ok">{tplMsg}</p>}
       <div className="admin-toolbar" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
