@@ -167,10 +167,14 @@ export const waApi = {
       readOnly: boolean;
     }>(`/whatsapp/messages?${p}`);
   },
-  sendText: (contactId: string, body: string) =>
+  sendText: (contactId: string, body: string, quotedMessageId?: string | null) =>
     request<WaMessage>("/whatsapp/messages", {
       method: "POST",
-      body: JSON.stringify({ contactId, body }),
+      body: JSON.stringify({
+        contactId,
+        body,
+        ...(quotedMessageId ? { quotedMessageId } : {}),
+      }),
     }),
   sendImage: async (contactId: string, file: File, caption?: string) => {
     const form = new FormData();

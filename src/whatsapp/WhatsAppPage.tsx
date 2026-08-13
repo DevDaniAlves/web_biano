@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+﻿import { useEffect, useMemo, useRef, useState, type FormEvent, type TouchEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { clearSession, getStoredUser, getToken } from "../auth";
 import ChangePasswordDialog from "../components/ChangePasswordDialog";
@@ -55,6 +55,218 @@ function formatDuration(sec: number) {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+/** Bolha com responder: swipe (mobile), long-press, menu ⋮ (desktop). */
+function ChatBubble(props: {
+  m: WaMessage;
+  selectedName: string;
+  selectedPhone: string;
+  messages: WaMessage[];
+  readOnly: boolean;
+  menuOpen: boolean;
+  onToggleMenu: () => void;
+  onReply: () => void;
+  onCloseMenu: () => void;
+  onLightbox: (src: string, type: "image" | "video") => void;
+}) {
+  const {
+    m,
+    selectedName,
+    selectedPhone,
+    messages,
+    readOnly,
+    menuOpen,
+    onToggleMenu,
+    onReply,
+    onCloseMenu,
+    onLightbox,
+  } = props;
+  const delivery =
+    m.delivery ?? (m.id.startsWith("tmp-") ? "pending" : m.direction === "out" ? "sent" : undefined);
+  const quoted =
+    m.quoted ??
+    (m.quotedBody || m.quotedMediaUrl || m.quotedExternalId
+      ? {
+          messageId:
+            messages.find((x) => {
+              const a = x.externalId || "";
+              const b = m.quotedExternalId || "";
+              return (
+                x.id === m.quotedExternalId ||
+                (a && b && (a === b || a.endsWith(b) || b.endsWith(a)))
+              );
+            })?.id ?? null,
+          type: m.quotedType || "text",
+          body: m.quotedBody ?? null,
+          mediaUrl: m.quotedMediaUrl ?? null,
+          author: selectedName || selectedPhone,
+        }
+      : null);
+  const src = mediaSrc(m.mediaUrl);
+  const quotedSrc = mediaSrc(quoted?.mediaUrl ?? null);
+  const showImage = (m.type === "image" || m.type === "sticker") && src;
+  const showQuote = Boolean(quoted);
+  const hideBody = isMediaPlaceholder(m.body);
+  const quoteThumb =
+    quotedSrc &&
+    (quoted?.type === "image" || quoted?.type === "sticker" || quoted?.type === "video");
+  const canReply = !readOnly && Boolean(m.externalId) && !m.id.startsWith("tmp-");
+
+  const swipeX = useRef(0);
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const swiping = useRef(false);
+  const longTimer = useRef<number | null>(null);
+  const [offset, setOffset] = useState(0);
+
+  function clearLong() {
+    if (longTimer.current != null) {
+      window.clearTimeout(longTimer.current);
+      longTimer.current = null;
+    }
+  }
+
+  function onTouchStart(e: TouchEvent) {
+    if (!canReply) return;
+    const t = e.touches[0];
+    startX.current = t.clientX;
+    startY.current = t.clientY;
+    swipeX.current = 0;
+    swiping.current = false;
+    clearLong();
+    longTimer.current = window.setTimeout(() => {
+      longTimer.current = null;
+      onToggleMenu();
+    }, 480);
+  }
+
+  function onTouchMove(e: TouchEvent) {
+    if (!canReply) return;
+    const t = e.touches[0];
+    const dx = t.clientX - startX.current;
+    const dy = t.clientY - startY.current;
+    if (!swiping.current && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
+      swiping.current = true;
+      clearLong();
+      onCloseMenu();
+    }
+    if (!swiping.current) {
+      if (Math.abs(dy) > 10 || Math.abs(dx) > 10) clearLong();
+      return;
+    }
+    const dir = m.direction === "in" ? 1 : -1;
+    const next = Math.max(0, Math.min(72, dx * dir));
+    swipeX.current = next;
+    setOffset(next);
+  }
+
+  function onTouchEnd() {
+    clearLong();
+    if (swiping.current && swipeX.current >= 48) onReply();
+    swiping.current = false;
+    swipeX.current = 0;
+    setOffset(0);
+  }
+
+  return (
+    <div className={`wa-msg-row ${m.direction}`}>
+      <div className="wa-swipe-hint" aria-hidden>
+        ↩
+      </div>
+      <div
+        id={`msg-${m.id}`}
+        data-ext={m.externalId || undefined}
+        className={`bubble ${m.direction}${delivery === "pending" ? " pending" : ""}${menuOpen ? " menu-open" : ""}`}
+        style={offset ? { transform: `translateX(${m.direction === "in" ? offset : -offset}px)` } : undefined}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchEnd}
+        onContextMenu={(e) => {
+          if (!canReply) return;
+          e.preventDefault();
+          onToggleMenu();
+        }}
+      >
+        {canReply && (
+          <button
+            type="button"
+            className="wa-msg-more"
+            aria-label="Mais opções"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleMenu();
+            }}
+          >
+            ⋮
+          </button>
+        )}
+        {menuOpen && (
+          <div className="wa-msg-menu" role="menu">
+            <button
+              type="button"
+              role="menuitem"
+              onClick={(e) => {
+                e.stopPropagation();
+                onReply();
+              }}
+            >
+              Responder
+            </button>
+          </div>
+        )}
+        {showQuote && quoted && (
+          <button
+            type="button"
+            className="wa-quote"
+            onClick={() => scrollToQuoted(quoted.messageId, m.quotedExternalId)}
+          >
+            <div className="wa-quote-body">
+              <strong>{quoted.author || selectedName || selectedPhone}</strong>
+              <span>{quoteKindLabel(quoted.type, quoted.body)}</span>
+            </div>
+            {quoteThumb && quotedSrc && (
+              <img className="wa-quote-thumb" src={quotedSrc} alt="" />
+            )}
+          </button>
+        )}
+        {showImage && src && (
+          <button type="button" className="wa-media-open" onClick={() => onLightbox(src, "image")}>
+            <img src={src} alt="" />
+          </button>
+        )}
+        {m.type === "audio" && src && <AudioBubble key={src} src={src} />}
+        {m.type === "video" && src && (
+          <button type="button" className="wa-media-open" onClick={() => onLightbox(src, "video")}>
+            <video className="wa-video" src={src} preload="metadata" muted />
+          </button>
+        )}
+        {m.type === "document" && src && (
+          <a className="wa-file" href={src} target="_blank" rel="noreferrer">
+            {m.body && !hideBody ? m.body : "Abrir documento"}
+          </a>
+        )}
+        {m.body && !hideBody && m.type !== "document" && (
+          <p>
+            <RichText text={m.body} />
+          </p>
+        )}
+        {!src && ["image", "sticker", "audio", "video", "document"].includes(m.type) && (
+          <p>{m.body || `[${m.type}]`}</p>
+        )}
+        <small>
+          <span>
+            {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </span>
+          {m.direction === "out" && <MsgTicks delivery={delivery} />}
+        </small>
+      </div>
+    </div>
+  );
 }
 
 function AudioBubble({ src }: { src: string }) {
@@ -771,6 +983,8 @@ function Inbox() {
   const [sellerId, setSellerId] = useState("");
   const [sellers, setSellers] = useState<WaUser[]>([]);
   const [text, setText] = useState("");
+  const [replyTo, setReplyTo] = useState<WaMessage | null>(null);
+  const [msgMenuId, setMsgMenuId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -804,6 +1018,8 @@ function Inbox() {
     setError("");
     setSelectedId(id);
     setAttachOpen(false);
+    setReplyTo(null);
+    setMsgMenuId(null);
     if (recording || recRef.current) {
       recCancelRef.current = true;
       recRef.current?.stop();
@@ -886,11 +1102,24 @@ function Inbox() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, selectedId]);
 
+  function startReply(m: WaMessage) {
+    if (!m.externalId || m.id.startsWith("tmp-")) {
+      setError("Aguarde a mensagem ser enviada para poder responder");
+      return;
+    }
+    setReplyTo(m);
+    setMsgMenuId(null);
+    window.setTimeout(() => {
+      document.querySelector<HTMLTextAreaElement>(".wa-composer textarea")?.focus();
+    }, 50);
+  }
+
   async function send() {
     if (!selectedId || !text.trim() || readOnly || sendingRef.current) return;
     sendingRef.current = true;
     setBusy(true);
     const body = text.trim();
+    const quoting = replyTo;
     const tempId = `tmp-${Date.now()}`;
     const optimistic: WaMessage = {
       id: tempId,
@@ -902,12 +1131,29 @@ function Inbox() {
       createdAt: new Date().toISOString(),
       sentBy: user ? { id: user.id, name: user.name } : null,
       delivery: "pending",
+      quotedExternalId: quoting?.externalId ?? null,
+      quotedBody: quoting?.body ?? null,
+      quotedType: quoting?.type ?? null,
+      quotedMediaUrl: quoting?.mediaUrl ?? null,
+      quoted: quoting
+        ? {
+            messageId: quoting.id,
+            type: quoting.type,
+            body: quoting.body,
+            mediaUrl: quoting.mediaUrl,
+            author:
+              quoting.direction === "out"
+                ? user?.name || "Você"
+                : selected?.name || selected?.phone || null,
+          }
+        : null,
     };
     setText("");
+    setReplyTo(null);
     setMessages((prev) => [...prev, optimistic]);
     setError("");
     try {
-      const msg = await waApi.sendText(selectedId, body);
+      const msg = await waApi.sendText(selectedId, body, quoting?.id ?? null);
       setMessages((prev) => {
         const next = prev.filter((m) => m.id !== tempId && m.id !== msg.id);
         return [...next, { ...msg, delivery: "sent" as const }];
@@ -918,6 +1164,7 @@ function Inbox() {
         prev.map((m) => (m.id === tempId ? { ...m, delivery: "failed" as const } : m))
       );
       setText(body);
+      if (quoting) setReplyTo(quoting);
       setError(String((e as Error).message));
     } finally {
       sendingRef.current = false;
@@ -1220,99 +1467,52 @@ function Inbox() {
                 )}
               </div>
             </div>
-            <div className="wa-thread">
-              {messages.map((m) => {
-                const delivery =
-                  m.delivery ??
-                  (m.id.startsWith("tmp-") ? "pending" : m.direction === "out" ? "sent" : undefined);
-                const quoted =
-                  m.quoted ??
-                  (m.quotedBody || m.quotedMediaUrl || m.quotedExternalId
-                    ? {
-                        messageId:
-                          messages.find((x) => {
-                            const a = x.externalId || "";
-                            const b = m.quotedExternalId || "";
-                            return x.id === m.quotedExternalId || (a && b && (a === b || a.endsWith(b) || b.endsWith(a)));
-                          })?.id ?? null,
-                        type: m.quotedType || "text",
-                        body: m.quotedBody ?? null,
-                        mediaUrl: m.quotedMediaUrl ?? null,
-                        author: selected.name || selected.phone,
-                      }
-                    : null);
-                const src = mediaSrc(m.mediaUrl);
-                const quotedSrc = mediaSrc(quoted?.mediaUrl ?? null);
-                const showImage = (m.type === "image" || m.type === "sticker") && src;
-                const showQuote = Boolean(quoted);
-                const hideBody = isMediaPlaceholder(m.body);
-                const quoteThumb =
-                  quotedSrc &&
-                  (quoted?.type === "image" || quoted?.type === "sticker" || quoted?.type === "video");
-                return (
-                  <div
-                    key={m.id}
-                    id={`msg-${m.id}`}
-                    data-ext={m.externalId || undefined}
-                    className={`bubble ${m.direction}${delivery === "pending" ? " pending" : ""}`}
-                  >
-                    {showQuote && quoted && (
-                      <button
-                        type="button"
-                        className="wa-quote"
-                        onClick={() => scrollToQuoted(quoted.messageId, m.quotedExternalId)}
-                      >
-                        <div className="wa-quote-body">
-                          <strong>{quoted.author || selected.name || selected.phone}</strong>
-                          <span>{quoteKindLabel(quoted.type, quoted.body)}</span>
-                        </div>
-                        {quoteThumb && quotedSrc && (
-                          <img className="wa-quote-thumb" src={quotedSrc} alt="" />
-                        )}
-                      </button>
-                    )}
-                    {showImage && src && (
-                      <button type="button" className="wa-media-open" onClick={() => setLightbox({ src, type: "image" })}>
-                        <img src={src} alt="" />
-                      </button>
-                    )}
-                    {m.type === "audio" && src && <AudioBubble key={src} src={src} />}
-                    {m.type === "video" && src && (
-                      <button type="button" className="wa-media-open" onClick={() => setLightbox({ src, type: "video" })}>
-                        <video className="wa-video" src={src} preload="metadata" muted />
-                      </button>
-                    )}
-                    {m.type === "document" && src && (
-                      <a className="wa-file" href={src} target="_blank" rel="noreferrer">
-                        {m.body && !hideBody ? m.body : "Abrir documento"}
-                      </a>
-                    )}
-                    {m.body && !hideBody && m.type !== "document" && (
-                      <p>
-                        <RichText text={m.body} />
-                      </p>
-                    )}
-                    {!src && ["image", "sticker", "audio", "video", "document"].includes(m.type) && (
-                      <p>{m.body || `[${m.type}]`}</p>
-                    )}
-                    <small>
-                      <span>
-                        {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                      {m.direction === "out" && <MsgTicks delivery={delivery} />}
-                    </small>
-                  </div>
-                );
-              })}
+            <div className="wa-thread" onClick={() => setMsgMenuId(null)}>
+              {messages.map((m) => (
+                <ChatBubble
+                  key={m.id}
+                  m={m}
+                  selectedName={selected.name || ""}
+                  selectedPhone={selected.phone}
+                  messages={messages}
+                  readOnly={readOnly}
+                  menuOpen={msgMenuId === m.id}
+                  onToggleMenu={() =>
+                    setMsgMenuId((cur) => (cur === m.id ? null : m.id))
+                  }
+                  onReply={() => startReply(m)}
+                  onCloseMenu={() => setMsgMenuId(null)}
+                  onLightbox={(src, type) => setLightbox({ src, type })}
+                />
+              ))}
               <div ref={bottomRef} />
             </div>
             {error && <p className="wa-error pad">{error}</p>}
             {readOnly ? (
               <div className="wa-readonly">Histórico — conversa encerrada</div>
             ) : (
+              <div className="wa-composer-wrap">
+                {replyTo && (
+                  <div className="wa-reply-bar">
+                    <div className="wa-reply-bar-body">
+                      <strong>
+                        Respondendo a{" "}
+                        {replyTo.direction === "out"
+                          ? "você"
+                          : selected.name || selected.phone}
+                      </strong>
+                      <span>{quoteKindLabel(replyTo.type, replyTo.body)}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="wa-reply-cancel"
+                      aria-label="Cancelar resposta"
+                      onClick={() => setReplyTo(null)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
               <div className="wa-composer">
                 <div className="wa-attach-wrap">
                   <button
@@ -1395,6 +1595,7 @@ function Inbox() {
                     )}
                   </button>
                 )}
+              </div>
               </div>
             )}
             {cameraOpen && (
