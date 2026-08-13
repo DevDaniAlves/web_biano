@@ -174,128 +174,130 @@ function ChatBubble(props: {
       <div className="wa-swipe-hint" aria-hidden>
         ↩
       </div>
-      {canReply && m.direction === "out" && (
-        <div className="wa-msg-actions">
-          <button
-            type="button"
-            className="wa-msg-more"
-            aria-label="Mais opções"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleMenu();
-            }}
-          >
-            ⋮
-          </button>
-          {menuOpen && (
-            <div className="wa-msg-menu" role="menu">
-              <button
-                type="button"
-                role="menuitem"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onReply();
-                }}
-              >
-                Responder
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-      <div
-        id={`msg-${m.id}`}
-        data-ext={m.externalId || undefined}
-        className={`bubble ${m.direction}${delivery === "pending" ? " pending" : ""}`}
-        style={offset ? { transform: `translateX(${m.direction === "in" ? offset : -offset}px)` } : undefined}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        onTouchCancel={onTouchEnd}
-        onContextMenu={(e) => {
-          if (!canReply) return;
-          e.preventDefault();
-          onToggleMenu();
-        }}
-      >
-        {showQuote && quoted && (
-          <button
-            type="button"
-            className="wa-quote"
-            onClick={() => scrollToQuoted(quoted.messageId, m.quotedExternalId)}
-          >
-            <div className="wa-quote-body">
-              <strong>{quoted.author || selectedName || selectedPhone}</strong>
-              <span>{quoteKindLabel(quoted.type, quoted.body)}</span>
-            </div>
-            {quoteThumb && quotedSrc && (
-              <img className="wa-quote-thumb" src={quotedSrc} alt="" />
+      <div className="wa-msg-cluster">
+        {canReply && m.direction === "out" && (
+          <div className="wa-msg-actions">
+            <button
+              type="button"
+              className="wa-msg-more"
+              aria-label="Mais opções"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleMenu();
+              }}
+            >
+              ⋮
+            </button>
+            {menuOpen && (
+              <div className="wa-msg-menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onReply();
+                  }}
+                >
+                  Responder
+                </button>
+              </div>
             )}
-          </button>
+          </div>
         )}
-        {showImage && src && (
-          <button type="button" className="wa-media-open" onClick={() => onLightbox(src, "image")}>
-            <img src={src} alt="" />
-          </button>
-        )}
-        {m.type === "audio" && src && <AudioBubble key={src} src={src} />}
-        {m.type === "video" && src && (
-          <button type="button" className="wa-media-open" onClick={() => onLightbox(src, "video")}>
-            <video className="wa-video" src={src} preload="metadata" muted />
-          </button>
-        )}
-        {m.type === "document" && src && (
-          <a className="wa-file" href={src} target="_blank" rel="noreferrer">
-            {m.body && !hideBody ? m.body : "Abrir documento"}
-          </a>
-        )}
-        {m.body && !hideBody && m.type !== "document" && (
-          <p>
-            <RichText text={m.body} />
-          </p>
-        )}
-        {!src && ["image", "sticker", "audio", "video", "document"].includes(m.type) && (
-          <p>{m.body || `[${m.type}]`}</p>
-        )}
-        <small>
-          <span>
-            {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </span>
-          {m.direction === "out" && <MsgTicks delivery={delivery} />}
-        </small>
-      </div>
-      {canReply && m.direction === "in" && (
-        <div className="wa-msg-actions">
-          <button
-            type="button"
-            className="wa-msg-more"
-            aria-label="Mais opções"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleMenu();
-            }}
-          >
-            ⋮
-          </button>
-          {menuOpen && (
-            <div className="wa-msg-menu" role="menu">
-              <button
-                type="button"
-                role="menuitem"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onReply();
-                }}
-              >
-                Responder
-              </button>
-            </div>
+        <div
+          id={`msg-${m.id}`}
+          data-ext={m.externalId || undefined}
+          className={`bubble ${m.direction}${delivery === "pending" ? " pending" : ""}`}
+          style={offset ? { transform: `translateX(${m.direction === "in" ? offset : -offset}px)` } : undefined}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          onTouchCancel={onTouchEnd}
+          onContextMenu={(e) => {
+            if (!canReply) return;
+            e.preventDefault();
+            onToggleMenu();
+          }}
+        >
+          {showQuote && quoted && (
+            <button
+              type="button"
+              className="wa-quote"
+              onClick={() => scrollToQuoted(quoted.messageId, m.quotedExternalId)}
+            >
+              <div className="wa-quote-body">
+                <strong>{quoted.author || selectedName || selectedPhone}</strong>
+                <span>{quoteKindLabel(quoted.type, quoted.body)}</span>
+              </div>
+              {quoteThumb && quotedSrc && (
+                <img className="wa-quote-thumb" src={quotedSrc} alt="" />
+              )}
+            </button>
           )}
+          {showImage && src && (
+            <button type="button" className="wa-media-open" onClick={() => onLightbox(src, "image")}>
+              <img src={src} alt="" />
+            </button>
+          )}
+          {m.type === "audio" && src && <AudioBubble key={src} src={src} />}
+          {m.type === "video" && src && (
+            <button type="button" className="wa-media-open" onClick={() => onLightbox(src, "video")}>
+              <video className="wa-video" src={src} preload="metadata" muted />
+            </button>
+          )}
+          {m.type === "document" && src && (
+            <a className="wa-file" href={src} target="_blank" rel="noreferrer">
+              {m.body && !hideBody ? m.body : "Abrir documento"}
+            </a>
+          )}
+          {m.body && !hideBody && m.type !== "document" && (
+            <p>
+              <RichText text={m.body} />
+            </p>
+          )}
+          {!src && ["image", "sticker", "audio", "video", "document"].includes(m.type) && (
+            <p>{m.body || `[${m.type}]`}</p>
+          )}
+          <small>
+            <span>
+              {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+            {m.direction === "out" && <MsgTicks delivery={delivery} />}
+          </small>
         </div>
-      )}
+        {canReply && m.direction === "in" && (
+          <div className="wa-msg-actions">
+            <button
+              type="button"
+              className="wa-msg-more"
+              aria-label="Mais opções"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleMenu();
+              }}
+            >
+              ⋮
+            </button>
+            {menuOpen && (
+              <div className="wa-msg-menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onReply();
+                  }}
+                >
+                  Responder
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
