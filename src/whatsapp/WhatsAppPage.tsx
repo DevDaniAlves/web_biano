@@ -170,26 +170,12 @@ function ChatBubble(props: {
   }
 
   return (
-    <div className={`wa-msg-row ${m.direction}`}>
+    <div className={`wa-msg-row ${m.direction}${menuOpen ? " menu-open" : ""}`}>
       <div className="wa-swipe-hint" aria-hidden>
         ↩
       </div>
-      <div
-        id={`msg-${m.id}`}
-        data-ext={m.externalId || undefined}
-        className={`bubble ${m.direction}${delivery === "pending" ? " pending" : ""}${menuOpen ? " menu-open" : ""}`}
-        style={offset ? { transform: `translateX(${m.direction === "in" ? offset : -offset}px)` } : undefined}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        onTouchCancel={onTouchEnd}
-        onContextMenu={(e) => {
-          if (!canReply) return;
-          e.preventDefault();
-          onToggleMenu();
-        }}
-      >
-        {canReply && (
+      {canReply && m.direction === "out" && (
+        <div className="wa-msg-actions">
           <button
             type="button"
             className="wa-msg-more"
@@ -201,21 +187,37 @@ function ChatBubble(props: {
           >
             ⋮
           </button>
-        )}
-        {menuOpen && (
-          <div className="wa-msg-menu" role="menu">
-            <button
-              type="button"
-              role="menuitem"
-              onClick={(e) => {
-                e.stopPropagation();
-                onReply();
-              }}
-            >
-              Responder
-            </button>
-          </div>
-        )}
+          {menuOpen && (
+            <div className="wa-msg-menu" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReply();
+                }}
+              >
+                Responder
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      <div
+        id={`msg-${m.id}`}
+        data-ext={m.externalId || undefined}
+        className={`bubble ${m.direction}${delivery === "pending" ? " pending" : ""}`}
+        style={offset ? { transform: `translateX(${m.direction === "in" ? offset : -offset}px)` } : undefined}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchEnd}
+        onContextMenu={(e) => {
+          if (!canReply) return;
+          e.preventDefault();
+          onToggleMenu();
+        }}
+      >
         {showQuote && quoted && (
           <button
             type="button"
@@ -265,6 +267,35 @@ function ChatBubble(props: {
           {m.direction === "out" && <MsgTicks delivery={delivery} />}
         </small>
       </div>
+      {canReply && m.direction === "in" && (
+        <div className="wa-msg-actions">
+          <button
+            type="button"
+            className="wa-msg-more"
+            aria-label="Mais opções"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleMenu();
+            }}
+          >
+            ⋮
+          </button>
+          {menuOpen && (
+            <div className="wa-msg-menu" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReply();
+                }}
+              >
+                Responder
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
