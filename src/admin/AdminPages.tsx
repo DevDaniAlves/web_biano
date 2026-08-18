@@ -41,6 +41,7 @@ export function ConnectPage() {
     provider: "meta" | "evolution" | "gupshup";
     configured: boolean;
     appName: string | null;
+    appId?: string | null;
     source: string | null;
     wabaId: string | null;
     coexistenceEnabled: boolean;
@@ -419,6 +420,8 @@ export function ConnectPage() {
       {gupshupInfo && (
         <p>
           App: <code>{gupshupInfo.appName || "—"}</code>
+          {" · "}
+          App ID: <code>{gupshupInfo.appId || "—"}</code>
           {" · "}
           Source: <code>{gupshupInfo.source || "—"}</code>
           {" · "}

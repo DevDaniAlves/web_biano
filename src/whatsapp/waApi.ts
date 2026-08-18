@@ -331,6 +331,7 @@ export const waApi = {
       provider: "meta" | "evolution" | "gupshup";
       configured: boolean;
       appName: string | null;
+      appId: string | null;
       source: string | null;
       wabaId: string | null;
       coexistenceEnabled: boolean;
