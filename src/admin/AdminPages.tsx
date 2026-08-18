@@ -24,7 +24,7 @@ export function ConnectPage() {
   const [error, setError] = useState("");
   const [metaBusy, setMetaBusy] = useState(false);
   const [metaInfo, setMetaInfo] = useState<{
-    provider: "meta" | "evolution";
+    provider: "meta" | "evolution" | "gupshup";
     configured: boolean;
     hasAccessToken: boolean;
     phoneNumberId: string | null;
@@ -36,6 +36,16 @@ export function ConnectPage() {
     webhookUrl?: string | null;
     webhookVerifyTokenSet?: boolean;
     boletoTemplate: string | null;
+  } | null>(null);
+  const [gupshupInfo, setGupshupInfo] = useState<{
+    provider: "meta" | "evolution" | "gupshup";
+    configured: boolean;
+    appName: string | null;
+    source: string | null;
+    wabaId: string | null;
+    coexistenceEnabled: boolean;
+    webhookUrl: string | null;
+    boletoTemplateId: string | null;
   } | null>(null);
   const [hookStatus, setHookStatus] = useState<{
     hits: number;
@@ -77,6 +87,10 @@ export function ConnectPage() {
     setMetaInfo(await waApi.metaStatus());
   }
 
+  async function loadGupshup() {
+    setGupshupInfo(await waApi.gupshupStatus());
+  }
+
   async function loadTemplates() {
     try {
       const r = await waApi.metaTemplates();
@@ -104,11 +118,13 @@ export function ConnectPage() {
   useEffect(() => {
     load().catch((e) => setError(String(e.message)));
     loadMeta().catch(() => {});
+    loadGupshup().catch(() => {});
     loadTemplates().catch(() => {});
     loadHook().catch(() => {});
     const t = setInterval(() => {
       load().catch(() => {});
       loadMeta().catch(() => {});
+      loadGupshup().catch(() => {});
       loadHook().catch(() => {});
     }, 5000);
     return () => clearInterval(t);
@@ -183,12 +199,12 @@ export function ConnectPage() {
     }
   }
 
-  async function setProvider(provider: "meta" | "evolution") {
+  async function setProvider(provider: "meta" | "evolution" | "gupshup") {
     setMetaBusy(true);
     setError("");
     try {
       await waApi.setMetaProvider(provider);
-      await loadMeta();
+      await Promise.all([loadMeta(), loadGupshup()]);
     } catch (e) {
       setError(String((e as Error).message));
     } finally {
@@ -200,7 +216,9 @@ export function ConnectPage() {
   const open = status === "open" || status === "connected";
   const statusLabel =
     open ? "conectado" : status === "connecting" ? "conectando" : status === "close" || status === "closed" || status === "disconnected" ? "desconectado" : info?.status || "—";
-  const provider = metaInfo?.provider ?? "evolution";
+  const provider = metaInfo?.provider ?? gupshupInfo?.provider ?? "evolution";
+  const providerLabel =
+    provider === "meta" ? "Meta" : provider === "gupshup" ? "Gupshup" : "Evolution";
 
   return (
     <div className="admin-panel">
@@ -211,7 +229,7 @@ export function ConnectPage() {
       <h2>Meta Cloud API</h2>
       <p className="lede">
         Canal oficial (templates, webhook Graph). Provider ativo:{" "}
-        <strong>{provider === "meta" ? "Meta" : "Evolution"}</strong>
+        <strong>{providerLabel}</strong>
         {metaInfo?.configured ? " · credenciais OK" : " · configure token/Phone Number ID no .env"}
       </p>
       {metaInfo && (
@@ -376,6 +394,57 @@ export function ConnectPage() {
         </table>
       )}
 
+      <h2 style={{ marginTop: "1.5rem" }}>Gupshup</h2>
+      <p className="lede">
+        BSP (Access API). App e Coexistência (CoEx) são feitos no{" "}
+        <a href="https://docs.gupshup.io/docs/onboarding-guide" target="_blank" rel="noreferrer">
+          dashboard Gupshup
+        </a>
+        , não neste CRM. Provider ativo: <strong>{providerLabel}</strong>
+        {gupshupInfo?.configured ? " · credenciais OK" : " · configure API key / app / source no .env"}
+      </p>
+      {gupshupInfo && (
+        <p>
+          App: <code>{gupshupInfo.appName || "—"}</code>
+          {" · "}
+          Source: <code>{gupshupInfo.source || "—"}</code>
+          {" · "}
+          CoEx: <code>{gupshupInfo.coexistenceEnabled ? "sim" : "não"}</code>
+          {" · "}
+          Template boleto: <code>{gupshupInfo.boletoTemplateId || "—"}</code>
+        </p>
+      )}
+      <p>
+        Status:{" "}
+        <strong>
+          {gupshupInfo?.configured
+            ? provider === "gupshup"
+              ? "conectado (Gupshup ativo)"
+              : "configurado (não ativo)"
+            : "não configurado"}
+        </strong>
+      </p>
+      <div className="admin-toolbar">
+        <button
+          type="button"
+          disabled={metaBusy || !gupshupInfo?.configured || provider === "gupshup"}
+          onClick={() => void setProvider("gupshup")}
+        >
+          Usar Gupshup
+        </button>
+      </div>
+      <p className="lede">
+        Callback URL no painel Gupshup:{" "}
+        <code>
+          {gupshupInfo?.webhookUrl ||
+            "https://apibiano-production.up.railway.app/whatsapp/webhook/gupshup"}
+        </code>
+      </p>
+      <p className="admin-hint-ok">
+        Cole essa URL em Callback / webhook do app Access API. O BIANO só guarda IDs depois do Go
+        Live. Evolution permanece como fallback (botão Usar Evolution acima).
+      </p>
+
       <h2 style={{ marginTop: "1.5rem" }}>Evolution (QR)</h2>
       <p className="lede">
         Credenciais da Evolution ficam no .env. A instância abaixo é usada quando o provider é
@@ -441,6 +510,8 @@ export function ConnectPage() {
       <p className="lede">
         Meta (produção):{" "}
         <code>https://apibiano-production.up.railway.app/whatsapp/webhook/meta</code>
+        . Gupshup:{" "}
+        <code>https://apibiano-production.up.railway.app/whatsapp/webhook/gupshup</code>
         . Evolution/local: <code>/webhook/ping</code> no ngrok. Se Hits ficar 0 com a Meta
         mostrando “Carga”, a Callback URL na Meta está errada ou a entrega falhou.
       </p>

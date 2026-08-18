@@ -313,7 +313,7 @@ export const waApi = {
   disconnectInstance: () => request("/whatsapp/connection", { method: "DELETE" }),
   metaStatus: () =>
     request<{
-      provider: "meta" | "evolution";
+      provider: "meta" | "evolution" | "gupshup";
       configured: boolean;
       hasAccessToken: boolean;
       phoneNumberId: string | null;
@@ -326,6 +326,20 @@ export const waApi = {
       boletoTemplate: string | null;
       boletoTemplateLang?: string | null;
     }>("/whatsapp/meta/status"),
+  gupshupStatus: () =>
+    request<{
+      provider: "meta" | "evolution" | "gupshup";
+      configured: boolean;
+      appName: string | null;
+      source: string | null;
+      wabaId: string | null;
+      coexistenceEnabled: boolean;
+      connectedAt: string | null;
+      webhookPath: string;
+      webhookUrl: string | null;
+      boletoTemplateId: string | null;
+      webhookSecretSet: boolean;
+    }>("/whatsapp/gupshup/status"),
   metaTemplates: () =>
     request<{
       templates: {
@@ -360,7 +374,7 @@ export const waApi = {
     request<{ ok: boolean }>("/whatsapp/meta/templates/" + encodeURIComponent(name), {
       method: "DELETE",
     }),
-  setMetaProvider: (provider: "meta" | "evolution") =>
+  setMetaProvider: (provider: "meta" | "evolution" | "gupshup") =>
     request<{ ok: boolean; provider: string }>("/whatsapp/meta/provider", {
       method: "POST",
       body: JSON.stringify({ provider }),
