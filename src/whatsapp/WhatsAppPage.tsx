@@ -1300,11 +1300,13 @@ function Inbox() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       recStreamRef.current = stream;
-      const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
+      const mime = MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")
+        ? "audio/ogg;codecs=opus"
         : MediaRecorder.isTypeSupported("audio/mp4")
           ? "audio/mp4"
-          : "";
+          : MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+            ? "audio/webm;codecs=opus"
+            : "";
       const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
       const chunks: Blob[] = [];
       rec.ondataavailable = (e) => {
@@ -1317,7 +1319,7 @@ function Inbox() {
           return;
         }
         const type = rec.mimeType || "audio/webm";
-        const ext = type.includes("mp4") ? "m4a" : "webm";
+        const ext = type.includes("ogg") ? "ogg" : type.includes("mp4") ? "m4a" : "webm";
         const blob = new Blob(chunks, { type });
         if (blob.size < 200) return;
         const file = new File([blob], `audio-${Date.now()}.${ext}`, { type });
