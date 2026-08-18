@@ -266,7 +266,20 @@ export function ConnectPage() {
         >
           Usar Evolution
         </button>
+        <button
+          type="button"
+          disabled={metaBusy || !gupshupInfo?.configured || provider === "gupshup"}
+          onClick={() => void setProvider("gupshup")}
+        >
+          Usar Gupshup
+        </button>
       </div>
+      {!gupshupInfo?.configured && (
+        <p className="admin-hint-ok">
+          Usar Gupshup só habilita depois de <code>GUPSHUP_API_KEY</code>,{" "}
+          <code>GUPSHUP_APP_NAME</code> e <code>GUPSHUP_SOURCE</code> no .env da API (e restart).
+        </p>
+      )}
       {!metaInfo?.embeddedSignupUrl && (
         <p className="admin-hint-ok">
           Para o botão de cadastro: defina <code>META_APP_ID</code> e{" "}
