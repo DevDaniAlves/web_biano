@@ -478,6 +478,30 @@ function MsgTicks({ delivery }: { delivery?: "pending" | "sent" | "failed" }) {
   );
 }
 
+function sortThread(list: WaMessage[]): WaMessage[] {
+  const arr = [...list].sort((a, b) => {
+    const t = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    if (t !== 0) return t;
+    if (a.direction === b.direction) return 0;
+    return a.direction === "in" ? -1 : 1;
+  });
+  let swapped = true;
+  while (swapped) {
+    swapped = false;
+    for (let i = 0; i < arr.length - 1; i++) {
+      const a = arr[i];
+      const b = arr[i + 1];
+      const dt = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      if (a.direction === "out" && !a.sentBy && b.direction === "in" && dt >= 0 && dt <= 20_000) {
+        arr[i] = b;
+        arr[i + 1] = a;
+        swapped = true;
+      }
+    }
+  }
+  return arr;
+}
+
 function dedupeOutMessages(list: WaMessage[]): WaMessage[] {
   const out: WaMessage[] = [];
   for (const m of list) {
@@ -524,7 +548,7 @@ function mergeServerMessages(server: WaMessage[], prev: WaMessage[]): WaMessage[
     }))
   );
   const pending = prev.filter((m) => m.id.startsWith("tmp-") && m.delivery === "pending");
-  if (pending.length === 0) return mapped;
+  if (pending.length === 0) return sortThread(mapped);
 
   const kept = pending.filter((p) => {
     const pt = new Date(p.createdAt).getTime();
@@ -536,7 +560,7 @@ function mergeServerMessages(server: WaMessage[], prev: WaMessage[]): WaMessage[
       return (s.body ?? "") === (p.body ?? "");
     });
   });
-  return dedupeOutMessages([...mapped, ...kept]);
+  return sortThread(dedupeOutMessages([...mapped, ...kept]));
 }
 
 export default function WhatsAppPage({ embedded = false }: { embedded?: boolean }) {
@@ -1061,7 +1085,7 @@ function Inbox() {
     try {
       const r = await waApi.messages(id, { peek: user?.role === "admin" });
       setMessages(
-        dedupeOutMessages(r.messages.map((m) => ({ ...m, delivery: "sent" as const })))
+        sortThread(dedupeOutMessages(r.messages.map((m) => ({ ...m, delivery: "sent" as const }))))
       );
       setReadOnly(r.readOnly);
       setSelectedFlags(r.contact);

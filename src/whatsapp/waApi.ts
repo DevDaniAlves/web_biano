@@ -330,6 +330,7 @@ export const waApi = {
     request<{
       provider: "meta" | "evolution" | "gupshup";
       configured: boolean;
+      buttonsEnabled?: boolean;
       appName: string | null;
       appId: string | null;
       source: string | null;
@@ -341,6 +342,11 @@ export const waApi = {
       boletoTemplateId: string | null;
       webhookSecretSet: boolean;
     }>("/whatsapp/gupshup/status"),
+  saveGupshupSettings: (data: { appId: string }) =>
+    request<{ ok: boolean; appId: string | null }>("/whatsapp/gupshup/settings", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   metaTemplates: () =>
     request<{
       templates: {

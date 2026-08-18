@@ -40,6 +40,7 @@ export function ConnectPage() {
   const [gupshupInfo, setGupshupInfo] = useState<{
     provider: "meta" | "evolution" | "gupshup";
     configured: boolean;
+    buttonsEnabled?: boolean;
     appName: string | null;
     appId?: string | null;
     source: string | null;
@@ -48,6 +49,7 @@ export function ConnectPage() {
     webhookUrl: string | null;
     boletoTemplateId: string | null;
   } | null>(null);
+  const [gupshupAppId, setGupshupAppId] = useState("");
   const [hookStatus, setHookStatus] = useState<{
     hits: number;
     lastHitAt: string | null;
@@ -89,7 +91,27 @@ export function ConnectPage() {
   }
 
   async function loadGupshup() {
-    setGupshupInfo(await waApi.gupshupStatus());
+    const row = await waApi.gupshupStatus();
+    setGupshupInfo(row);
+    setGupshupAppId((prev) => prev || row.appId || "");
+  }
+
+  async function saveGupshupAppId() {
+    const appId = gupshupAppId.trim();
+    if (!appId) {
+      setError("Informe o App ID do Settings Gupshup");
+      return;
+    }
+    setMetaBusy(true);
+    setError("");
+    try {
+      await waApi.saveGupshupSettings({ appId });
+      await loadGupshup();
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setMetaBusy(false);
+    }
   }
 
   async function loadTemplates() {
@@ -427,6 +449,8 @@ export function ConnectPage() {
           {" · "}
           CoEx: <code>{gupshupInfo.coexistenceEnabled ? "sim" : "não"}</code>
           {" · "}
+          Botões: <code>{gupshupInfo.buttonsEnabled ? "sim" : "não (falta App ID)"}</code>
+          {" · "}
           Template boleto: <code>{gupshupInfo.boletoTemplateId || "—"}</code>
         </p>
       )}
@@ -440,7 +464,16 @@ export function ConnectPage() {
             : "não configurado"}
         </strong>
       </p>
-      <div className="admin-toolbar">
+      <div className="admin-toolbar" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
+        <input
+          value={gupshupAppId}
+          onChange={(e) => setGupshupAppId(e.target.value)}
+          placeholder="App ID (Settings Gupshup)"
+          style={{ maxWidth: "22rem" }}
+        />
+        <button type="button" className="ghost" disabled={metaBusy || !gupshupAppId.trim()} onClick={() => void saveGupshupAppId()}>
+          Salvar App ID
+        </button>
         <button
           type="button"
           disabled={metaBusy || !gupshupInfo?.configured || provider === "gupshup"}
@@ -449,6 +482,13 @@ export function ConnectPage() {
           Usar Gupshup
         </button>
       </div>
+      {!gupshupInfo?.buttonsEnabled && (
+        <p className="admin-hint-ok">
+          Sem App ID o menu vai como texto (<code>1 - Atendimento</code>), não como botão clicável.
+          Cole o UUID de BianoWhats → Settings (ex. <code>cabde7f5-ff76-4530-afcc-4ef014ff8d00</code>)
+          ou defina <code>GUPSHUP_APP_ID</code> no Railway.
+        </p>
+      )}
       <p className="lede">
         Callback URL no painel Gupshup:{" "}
         <code>
