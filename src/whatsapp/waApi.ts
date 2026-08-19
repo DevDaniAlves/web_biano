@@ -80,7 +80,11 @@ export type ReportsData = {
 export interface WaContact {
   id: string;
   phone: string;
+  /** Nome exibido: savedName ?? pushName ?? phone */
   name: string | null;
+  pushName?: string | null;
+  savedName?: string | null;
+  hasSavedContact?: boolean;
   status: ContactStatus;
   lastMessageAt: string | null;
   lastMessagePreview: string | null;
@@ -209,6 +213,11 @@ export const waApi = {
     request<WaContact>("/whatsapp/contacts/webhook-pause", {
       method: "POST",
       body: JSON.stringify({ contactId, paused }),
+    }),
+  saveContactName: (contactId: string, name: string) =>
+    request<WaContact>("/whatsapp/contacts/save-name", {
+      method: "POST",
+      body: JSON.stringify({ contactId, name }),
     }),
   warnInactivity: (contactId: string) =>
     request("/whatsapp/contacts/inactivity-warn", {

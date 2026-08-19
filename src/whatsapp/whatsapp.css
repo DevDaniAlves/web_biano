@@ -295,6 +295,75 @@
   display: block;
 }
 
+.wa-contact-title {
+  min-width: 0;
+  flex: 1;
+}
+
+.wa-contact-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.wa-save-contact {
+  border: 1px solid var(--wa-accent);
+  background: rgba(0, 168, 132, 0.12);
+  color: var(--wa-accent);
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.wa-save-contact:hover:not(:disabled) {
+  background: rgba(0, 168, 132, 0.22);
+}
+
+.wa-save-contact:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.wa-save-contact-form {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.wa-save-contact-form input {
+  flex: 1 1 140px;
+  min-width: 120px;
+  border: 1px solid var(--wa-border);
+  background: var(--wa-panel);
+  color: inherit;
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.78rem;
+}
+
+.wa-save-contact-form button {
+  border: 0;
+  background: var(--wa-accent);
+  color: #fff;
+  padding: 0.35rem 0.55rem;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.wa-save-contact-form button.ghost {
+  background: transparent;
+  border: 1px solid var(--wa-border);
+  color: var(--white);
+}
+
 .wa-chat-head span {
   font-size: 0.75rem;
   color: var(--wa-muted);

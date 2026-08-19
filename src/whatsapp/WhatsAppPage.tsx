@@ -1048,6 +1048,8 @@ function Inbox() {
   const [recording, setRecording] = useState(false);
   const [lightbox, setLightbox] = useState<{ src: string; type: "image" | "video" } | null>(null);
   const [error, setError] = useState("");
+  const [saveContactOpen, setSaveContactOpen] = useState(false);
+  const [saveContactDraft, setSaveContactDraft] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   /** Trava síncrona — evita Enter/clique duplo antes do setState. */
@@ -1159,6 +1161,11 @@ function Inbox() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, selectedId]);
 
+  useEffect(() => {
+    setSaveContactOpen(false);
+    setSaveContactDraft("");
+  }, [selectedId]);
+
   function startReply(m: WaMessage) {
     if (!m.externalId || m.id.startsWith("tmp-")) {
       setError("Aguarde a mensagem ser enviada para poder responder");
@@ -1169,6 +1176,24 @@ function Inbox() {
     window.setTimeout(() => {
       document.querySelector<HTMLTextAreaElement>(".wa-composer textarea")?.focus();
     }, 50);
+  }
+
+  async function saveContact(e?: FormEvent) {
+    e?.preventDefault();
+    if (!selectedId || !saveContactDraft.trim() || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const updated = await waApi.saveContactName(selectedId, saveContactDraft.trim());
+      setSelectedFlags(updated);
+      setContacts((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
+      setSaveContactOpen(false);
+      setSaveContactDraft("");
+    } catch (err) {
+      setError(String((err as Error).message));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function send() {
@@ -1491,10 +1516,54 @@ function Inbox() {
               <div className="wa-avatar sm">
                 {(selected.name || selected.phone).slice(0, 1).toUpperCase()}
               </div>
-              <div>
-                <strong>{selected.name || selected.phone}</strong>
+              <div className="wa-contact-title">
+                <div className="wa-contact-name-row">
+                  <strong>{selected.name || selected.phone}</strong>
+                  {!selected.hasSavedContact && !saveContactOpen && (
+                    <button
+                      type="button"
+                      className="wa-save-contact"
+                      disabled={busy}
+                      onClick={() => {
+                        setSaveContactDraft(selected.pushName || selected.name || "");
+                        setSaveContactOpen(true);
+                      }}
+                    >
+                      Salvar contato
+                    </button>
+                  )}
+                </div>
+                {saveContactOpen && (
+                  <form className="wa-save-contact-form" onSubmit={(e) => void saveContact(e)}>
+                    <input
+                      type="text"
+                      value={saveContactDraft}
+                      onChange={(e) => setSaveContactDraft(e.target.value)}
+                      placeholder="Nome do cliente"
+                      autoFocus
+                      maxLength={120}
+                    />
+                    <button type="submit" disabled={busy || !saveContactDraft.trim()}>
+                      Salvar
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      disabled={busy}
+                      onClick={() => {
+                        setSaveContactOpen(false);
+                        setSaveContactDraft("");
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </form>
+                )}
                 <span>
                   {selected.phone}
+                  {selected.hasSavedContact && selected.pushName && selected.pushName !== selected.savedName
+                    ? ` · WhatsApp: ${selected.pushName}`
+                    : ""}
                   {selected.rating != null ? ` · Nota ${selected.rating}` : ""}
                 </span>
               </div>
