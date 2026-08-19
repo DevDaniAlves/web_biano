@@ -1,14 +1,27 @@
-import { getToken } from "./auth";
+import { getToken, isStandaloneDisplay } from "./auth";
 
 const API = import.meta.env.VITE_API_URL ?? "/api";
+const STANDALONE_PUSH_KEY = "calangus-push-standalone";
 
-export type PushEnableResult = "ok" | "denied" | "unsupported" | "skipped";
+export type PushEnableResult = "ok" | "denied" | "unsupported" | "skipped" | "needs-install";
 
 const ALERT_VIBRATE = [120, 60, 120, 60, 120];
 let alertAudioCtx: AudioContext | null = null;
 
 function log(...args: unknown[]) {
   console.log("[push]", ...args);
+}
+
+export function isIosDevice() {
+  if (typeof navigator === "undefined") return false;
+  return (
+    /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
+export function pushNeedsHomeScreenInstall() {
+  return isIosDevice() && !isStandaloneDisplay();
 }
 
 function urlBase64ToUint8Array(base64String: string) {
@@ -69,6 +82,12 @@ export async function enablePushNotifications(): Promise<PushEnableResult> {
     return perm === "denied" ? "denied" : "skipped";
   }
 
+  const standalone = isStandaloneDisplay();
+  if (isIosDevice() && !standalone) {
+    log("iOS fora do PWA instalado — push em background não funciona no Safari");
+    return "needs-install";
+  }
+
   const reg = await navigator.serviceWorker.ready;
   log("service worker pronto", { scope: reg.scope, active: Boolean(reg.active) });
 
@@ -77,6 +96,15 @@ export async function enablePushNotifications(): Promise<PushEnableResult> {
     log("VAPID public ok", publicKey.slice(0, 24) + "…");
 
     let sub = await reg.pushManager.getSubscription();
+    const markedStandalone = localStorage.getItem(STANDALONE_PUSH_KEY) === "1";
+
+    // iOS: subscription feita no Safari não recebe push com app fechado — recriar no PWA.
+    if (isIosDevice() && standalone && sub && !markedStandalone) {
+      log("iOS: recriando subscription no ícone da tela inicial");
+      await sub.unsubscribe().catch(() => {});
+      sub = null;
+    }
+
     if (!sub) {
       log("sem subscription — criando…");
       sub = await reg.pushManager.subscribe({
@@ -87,6 +115,8 @@ export async function enablePushNotifications(): Promise<PushEnableResult> {
     } else {
       log("subscription já existia");
     }
+
+    if (standalone) localStorage.setItem(STANDALONE_PUSH_KEY, "1");
 
     const json = sub.toJSON();
     log("endpoint", json.endpoint?.slice(0, 80));
@@ -230,6 +260,7 @@ export async function disablePushNotifications() {
       method: "DELETE",
     }).catch((err) => log("unsubscribe API falhou", err));
     await sub.unsubscribe().catch(() => {});
+    localStorage.removeItem(STANDALONE_PUSH_KEY);
     await setAppBadgeCount(0);
     log("subscription removida");
   } catch (err) {

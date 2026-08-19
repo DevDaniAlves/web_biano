@@ -1,4 +1,4 @@
-const SW_VERSION = "2026-08-19-v3";
+const SW_VERSION = "2026-08-19-v4";
 
 /** Padrão de vibração (Android). iOS ignora — usa vibração do sistema nas notificações. */
 const ALERT_VIBRATE = [120, 60, 120, 60, 120];
@@ -32,9 +32,8 @@ async function setBadge(count) {
   }
 }
 
-async function onPush(event) {
-  console.log("[push][sw]", SW_VERSION, "evento push", { hasData: Boolean(event.data) });
-  let data = {
+function parsePushData(event) {
+  const fallback = {
     title: "Calangus",
     body: "Nova atualização",
     url: "/app",
@@ -43,19 +42,26 @@ async function onPush(event) {
     badge: 1,
   };
   try {
-    if (event.data) data = { ...data, ...event.data.json() };
+    if (event.data) return { ...fallback, ...event.data.json() };
   } catch (err) {
     console.error("[push][sw] payload inválido", err);
   }
+  return fallback;
+}
 
+async function notifyClients(data) {
   const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-  const hasFocused = windows.some((c) => c.focused);
-  console.log("[push][sw] janelas", windows.length, { hasFocused });
-
   for (const client of windows) {
     client.postMessage({ type: "wa-push", data: { ...data, alert: true } });
   }
+  return windows;
+}
 
+async function onPush(event) {
+  console.log("[push][sw]", SW_VERSION, "evento push", { hasData: Boolean(event.data) });
+  const data = parsePushData(event);
+
+  // iOS: showNotification primeiro — SW tem pouco tempo em background.
   let notificationShown = false;
   try {
     await self.registration.showNotification(data.title || "Calangus", {
@@ -63,7 +69,6 @@ async function onPush(event) {
       icon: "/icons/icon-192.png",
       badge: "/icons/icon-192.png",
       tag: data.tag || "calangus",
-      renotify: true,
       silent: false,
       vibrate: ALERT_VIBRATE,
       data: { url: data.url || "/app", contactId: data.contactId, alert: true },
@@ -74,9 +79,15 @@ async function onPush(event) {
     console.error("[push][sw] showNotification falhou", err);
   }
 
-  // Badge só se a notificação apareceu — evita bolinha sem alerta visível.
   if (notificationShown) {
     await setBadge(data.badge ?? 1);
+  }
+
+  try {
+    const windows = await notifyClients(data);
+    console.log("[push][sw] janelas notificadas", windows.length);
+  } catch (err) {
+    console.error("[push][sw] notifyClients falhou", err);
   }
 }
 

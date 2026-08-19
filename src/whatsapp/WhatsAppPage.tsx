@@ -3,7 +3,7 @@ import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react
 import { clearSession, getStoredUser, getToken } from "../auth";
 import ChangePasswordDialog from "../components/ChangePasswordDialog";
 import PushPermissionBanner from "../components/PushPermissionBanner";
-import { disablePushNotifications, showForegroundNotification, syncAppBadgeFromServer, bindPushResumeRefresh } from "../push";
+import { disablePushNotifications, showForegroundNotification, syncAppBadgeFromServer, bindPushResumeRefresh, enablePushNotifications } from "../push";
 import { useTheme } from "../store/ThemeContext";
 import {
   waApi,
@@ -1126,6 +1126,10 @@ function Inbox() {
   useEffect(() => {
     if (contactParam) void openContact(contactParam);
   }, [contactParam]);
+
+  useEffect(() => {
+    void enablePushNotifications();
+  }, []);
 
   useEffect(() => {
     return bindPushResumeRefresh();

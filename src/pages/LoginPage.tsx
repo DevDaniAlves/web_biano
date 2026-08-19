@@ -44,6 +44,9 @@ export default function LoginPage() {
         setPushStep(true);
         return;
       }
+      if (isStandaloneDisplay()) {
+        await enablePushNotifications();
+      }
       goHome();
     } catch (err) {
       setError(String((err as Error).message));

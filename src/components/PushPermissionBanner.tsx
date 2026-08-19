@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { enablePushNotifications } from "../push";
+import { enablePushNotifications, pushNeedsHomeScreenInstall } from "../push";
 
 function currentPermission(): NotificationPermission | "unsupported" {
   if (typeof window === "undefined" || !("Notification" in window) || !("PushManager" in window)) {
@@ -14,6 +14,7 @@ export default function PushPermissionBanner({ active }: { active: boolean }) {
   const [hidden, setHidden] = useState(
     () => sessionStorage.getItem("calangus-push-banner") === "1"
   );
+  const needsInstall = pushNeedsHomeScreenInstall();
 
   useEffect(() => {
     if (!active) return;
@@ -32,7 +33,31 @@ export default function PushPermissionBanner({ active }: { active: boolean }) {
     }
   }
 
-  if (!active || hidden || perm === "unsupported" || perm === "granted") return null;
+  if (!active || hidden) return null;
+
+  if (needsInstall) {
+    return (
+      <div className="push-banner" role="status">
+        <span>
+          iPhone: adicione o Calangus à <strong>Tela de Início</strong> (Safari → Compartilhar →
+          Adicionar à Tela de Início) e abra pelo ícone. Só assim o alerta chega com o app fechado.
+        </span>
+        <button
+          type="button"
+          className="push-banner-close"
+          aria-label="Fechar"
+          onClick={() => {
+            sessionStorage.setItem("calangus-push-banner", "1");
+            setHidden(true);
+          }}
+        >
+          ×
+        </button>
+      </div>
+    );
+  }
+
+  if (perm === "unsupported" || perm === "granted") return null;
 
   if (perm === "denied") {
     return (
