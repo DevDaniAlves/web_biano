@@ -7,9 +7,11 @@ import "./theme.css";
 
 if ("serviceWorker" in navigator) {
   void navigator.serviceWorker
-    .register("/sw.js")
+    .register("/sw.js", { scope: "/", updateViaCache: "none" })
     .then((reg) => {
       console.log("[push] SW registrado", { scope: reg.scope, active: Boolean(reg.active) });
+      void reg.update();
+      setInterval(() => void reg.update(), 60 * 60 * 1000);
     })
     .catch((err) => {
       console.error("[push] SW falhou ao registrar:", err);

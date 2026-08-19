@@ -3,7 +3,7 @@ import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react
 import { clearSession, getStoredUser, getToken } from "../auth";
 import ChangePasswordDialog from "../components/ChangePasswordDialog";
 import PushPermissionBanner from "../components/PushPermissionBanner";
-import { disablePushNotifications, syncAppBadgeFromServer } from "../push";
+import { disablePushNotifications, showForegroundNotification, syncAppBadgeFromServer, bindPushResumeRefresh } from "../push";
 import { useTheme } from "../store/ThemeContext";
 import {
   waApi,
@@ -1128,11 +1128,30 @@ function Inbox() {
   }, [contactParam]);
 
   useEffect(() => {
+    return bindPushResumeRefresh();
+  }, []);
+
+  useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
     function onMsg(event: MessageEvent) {
       if (event.data?.type === "wa-push") {
+        const payload = event.data?.data as {
+          title?: string;
+          body?: string;
+          tag?: string;
+          url?: string;
+          contactId?: string;
+          alert?: boolean;
+        };
+        showForegroundNotification({
+          title: payload?.title,
+          body: payload?.body,
+          tag: payload?.tag ?? payload?.contactId,
+          url: payload?.url,
+          alert: payload?.alert !== false,
+        });
         void refreshContacts();
-        const id = event.data?.data?.contactId as string | undefined;
+        const id = payload?.contactId;
         if (id && id === selectedId) void refreshMessages(id, true);
       }
       if (event.data?.type === "wa-open") {

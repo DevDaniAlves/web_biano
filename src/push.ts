@@ -4,6 +4,9 @@ const API = import.meta.env.VITE_API_URL ?? "/api";
 
 export type PushEnableResult = "ok" | "denied" | "unsupported" | "skipped";
 
+const ALERT_VIBRATE = [120, 60, 120, 60, 120];
+let alertAudioCtx: AudioContext | null = null;
+
 function log(...args: unknown[]) {
   console.log("[push]", ...args);
 }
@@ -128,6 +131,93 @@ export async function syncAppBadgeFromServer() {
     log("falha ao sync badge", err);
     return 0;
   }
+}
+
+/** Som curto + vibração quando o app está aberto (iOS/Android). */
+export function playAlertFeedback() {
+  try {
+    if ("vibrate" in navigator) navigator.vibrate(ALERT_VIBRATE);
+  } catch {
+    /* iOS não suporta vibrate na Web */
+  }
+
+  try {
+    type AudioCtxCtor = typeof AudioContext;
+    const Ctx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: AudioCtxCtor }).webkitAudioContext;
+    if (!Ctx) return;
+
+    if (!alertAudioCtx) alertAudioCtx = new Ctx();
+    const ctx = alertAudioCtx;
+    if (ctx.state === "suspended") void ctx.resume();
+
+    const t0 = ctx.currentTime;
+    const playTone = (freq: number, start: number, dur: number, vol = 0.22) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.0001, t0 + start);
+      gain.gain.exponentialRampToValueAtTime(vol, t0 + start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + start + dur);
+      osc.start(t0 + start);
+      osc.stop(t0 + start + dur + 0.02);
+    };
+
+    playTone(880, 0, 0.12);
+    playTone(1174, 0.14, 0.16, 0.18);
+  } catch (err) {
+    log("alert tone falhou", err);
+  }
+}
+
+/** Fallback quando o app está aberto e o SO não exibe banner do SW. */
+export function showForegroundNotification(data: {
+  title?: string;
+  body?: string;
+  tag?: string;
+  url?: string;
+  alert?: boolean;
+}) {
+  if (data.alert !== false) playAlertFeedback();
+
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  if (document.visibilityState !== "visible") return;
+  try {
+    const n = new Notification(data.title || "Calangus", {
+      body: data.body || "",
+      icon: "/icons/icon-192.png",
+      tag: data.tag || "calangus",
+    });
+    n.onclick = () => {
+      window.focus();
+      n.close();
+      if (data.url) window.location.href = data.url;
+    };
+  } catch (err) {
+    log("foreground notification falhou", err);
+  }
+}
+
+/** Revalida subscription ao voltar do segundo plano (comum em Android/iOS). */
+export function bindPushResumeRefresh() {
+  if (typeof document === "undefined") return () => {};
+  let busy = false;
+  async function onVisible() {
+    if (document.visibilityState !== "visible" || busy || !getToken()) return;
+    busy = true;
+    try {
+      await enablePushNotifications();
+      await syncAppBadgeFromServer();
+    } finally {
+      busy = false;
+    }
+  }
+  document.addEventListener("visibilitychange", onVisible);
+  return () => document.removeEventListener("visibilitychange", onVisible);
 }
 
 export async function disablePushNotifications() {

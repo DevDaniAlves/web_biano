@@ -7,7 +7,8 @@ import { waApi, type CatalogProduct } from "../whatsapp/waApi";
 import "./store.css";
 
 function waMeLink(phone: string, text: string) {
-  return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+  const digits = phone.replace(/\D/g, "");
+  return `https://wa.me/${digits}?text=${encodeURIComponent(text.trim())}`;
 }
 
 function sellerMessage(keyword: string, productName?: string) {

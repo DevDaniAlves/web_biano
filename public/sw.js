@@ -1,3 +1,8 @@
+const SW_VERSION = "2026-08-19-v3";
+
+/** Padrão de vibração (Android). iOS ignora — usa vibração do sistema nas notificações. */
+const ALERT_VIBRATE = [120, 60, 120, 60, 120];
+
 self.addEventListener("push", (event) => {
   event.waitUntil(onPush(event));
 });
@@ -28,7 +33,7 @@ async function setBadge(count) {
 }
 
 async function onPush(event) {
-  console.log("[push][sw] evento push recebido", { hasData: Boolean(event.data) });
+  console.log("[push][sw]", SW_VERSION, "evento push", { hasData: Boolean(event.data) });
   let data = {
     title: "Calangus",
     body: "Nova atualização",
@@ -42,18 +47,16 @@ async function onPush(event) {
   } catch (err) {
     console.error("[push][sw] payload inválido", err);
   }
-  console.log("[push][sw] payload", data);
-
-  await setBadge(data.badge ?? 1);
 
   const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-  console.log("[push][sw] janelas abertas", windows.length, {
-    focused: windows.some((c) => c.focused),
-  });
+  const hasFocused = windows.some((c) => c.focused);
+  console.log("[push][sw] janelas", windows.length, { hasFocused });
+
   for (const client of windows) {
-    client.postMessage({ type: "wa-push", data });
+    client.postMessage({ type: "wa-push", data: { ...data, alert: true } });
   }
 
+  let notificationShown = false;
   try {
     await self.registration.showNotification(data.title || "Calangus", {
       body: data.body || "",
@@ -61,11 +64,19 @@ async function onPush(event) {
       badge: "/icons/icon-192.png",
       tag: data.tag || "calangus",
       renotify: true,
-      data: { url: data.url || "/app", contactId: data.contactId },
+      silent: false,
+      vibrate: ALERT_VIBRATE,
+      data: { url: data.url || "/app", contactId: data.contactId, alert: true },
     });
+    notificationShown = true;
     console.log("[push][sw] showNotification ok");
   } catch (err) {
     console.error("[push][sw] showNotification falhou", err);
+  }
+
+  // Badge só se a notificação apareceu — evita bolinha sem alerta visível.
+  if (notificationShown) {
+    await setBadge(data.badge ?? 1);
   }
 }
 

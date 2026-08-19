@@ -38,7 +38,7 @@ export default function PushPermissionBanner({ active }: { active: boolean }) {
     return (
       <div className="push-banner" role="status">
         <span>
-          Notificações bloqueadas. No iPhone: Ajustes → Calangus → Notificações.
+          Notificações bloqueadas. No iPhone: Ajustes → Calangus → Notificações (ative Som e Badges).
         </span>
         <button
           type="button"
