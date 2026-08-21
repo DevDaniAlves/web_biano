@@ -309,8 +309,14 @@ export const waApi = {
       lastPairingCode?: string | null;
       credentialsOk: boolean;
       defaultPhone?: string;
+      botEnabled?: boolean;
       live: unknown;
     }>("/whatsapp/connection"),
+  setBotEnabled: (enabled: boolean) =>
+    request<{ ok: boolean; botEnabled: boolean }>("/whatsapp/bot", {
+      method: "POST",
+      body: JSON.stringify({ enabled }),
+    }),
   connectInstance: (instanceName: string, number?: string) =>
     request<{ lastQr: string | null; lastPairingCode?: string | null; pairingCode?: string | null }>(
       "/whatsapp/connection",

@@ -37,6 +37,7 @@ export function ConnectPage() {
     webhookVerifyTokenSet?: boolean;
     boletoTemplate: string | null;
   } | null>(null);
+  const [botEnabled, setBotEnabled] = useState(true);
   const [gupshupInfo, setGupshupInfo] = useState<{
     provider: "meta" | "evolution" | "gupshup";
     configured: boolean;
@@ -105,6 +106,20 @@ export function ConnectPage() {
     setInfo(row);
     setInstanceName((prev) => prev || row.instanceName);
     setPhone((prev) => prev || row.defaultPhone || "");
+    if (typeof row.botEnabled === "boolean") setBotEnabled(row.botEnabled);
+  }
+
+  async function toggleBot(enabled: boolean) {
+    setMetaBusy(true);
+    setError("");
+    try {
+      const r = await waApi.setBotEnabled(enabled);
+      setBotEnabled(r.botEnabled);
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setMetaBusy(false);
+    }
   }
 
   async function loadMeta() {
@@ -367,6 +382,36 @@ export function ConnectPage() {
     <div className="admin-panel">
       <div className="admin-panel-head">
         <h1>Conectar WhatsApp</h1>
+      </div>
+
+      <h2>Robô CRM (menus)</h2>
+      <p className="lede">
+        Quando ativo, o bot envia menus (departamento, vendedores) e responde automaticamente.
+        Desative para testar o número/API sem respostas automáticas — as mensagens dos clientes
+        continuam entrando no CRM.
+      </p>
+      <p>
+        Status do robô:{" "}
+        <strong className={botEnabled ? "connect-status open" : "connect-status"}>
+          {botEnabled ? "ativado" : "desativado"}
+        </strong>
+      </p>
+      <div className="admin-toolbar">
+        <button
+          type="button"
+          disabled={metaBusy || botEnabled}
+          onClick={() => void toggleBot(true)}
+        >
+          Ativar robô CRM
+        </button>
+        <button
+          type="button"
+          className="ghost"
+          disabled={metaBusy || !botEnabled}
+          onClick={() => void toggleBot(false)}
+        >
+          Desativar robô CRM
+        </button>
       </div>
 
       <h2>Meta Cloud API</h2>
