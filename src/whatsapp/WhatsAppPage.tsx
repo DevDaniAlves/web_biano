@@ -1050,7 +1050,11 @@ function Inbox() {
   const [error, setError] = useState("");
   const [saveContactOpen, setSaveContactOpen] = useState(false);
   const [saveContactDraft, setSaveContactDraft] = useState("");
+  const [newBelowCount, setNewBelowCount] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
+  const knownMsgIdsRef = useRef<Set<string>>(new Set());
   const galleryRef = useRef<HTMLInputElement>(null);
   /** Trava síncrona — evita Enter/clique duplo antes do setState. */
   const sendingRef = useRef(false);
@@ -1181,9 +1185,43 @@ function Inbox() {
   }, [selectedId]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, selectedId]);
+    stickToBottomRef.current = true;
+    setNewBelowCount(0);
+    knownMsgIdsRef.current = new Set();
+  }, [selectedId]);
 
+  useEffect(() => {
+    const prev = knownMsgIdsRef.current;
+    const fresh = messages.filter((m) => !prev.has(m.id));
+    knownMsgIdsRef.current = new Set(messages.map((m) => m.id));
+
+    if (stickToBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: prev.size === 0 ? "auto" : "smooth" });
+      setNewBelowCount(0);
+      return;
+    }
+
+    const inboundNew = fresh.filter(
+      (m) => m.direction === "in" && !m.id.startsWith("tmp-")
+    );
+    if (inboundNew.length) {
+      setNewBelowCount((n) => n + inboundNew.length);
+    }
+  }, [messages]);
+
+  function onThreadScroll() {
+    const el = threadRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+    stickToBottomRef.current = nearBottom;
+    if (nearBottom) setNewBelowCount(0);
+  }
+
+  function jumpToLatest() {
+    stickToBottomRef.current = true;
+    setNewBelowCount(0);
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }
   useEffect(() => {
     setSaveContactOpen(false);
     setSaveContactDraft("");
@@ -1255,6 +1293,8 @@ function Inbox() {
     };
     setText("");
     setReplyTo(null);
+    stickToBottomRef.current = true;
+    setNewBelowCount(0);
     setMessages((prev) => [...prev, optimistic]);
     setError("");
     try {
@@ -1306,6 +1346,8 @@ function Inbox() {
       delivery: "pending",
     };
     setText("");
+    stickToBottomRef.current = true;
+    setNewBelowCount(0);
     setMessages((prev) => [...prev, optimistic]);
     try {
       const toSend = kind === "image" ? await compressImage(file) : file;
@@ -1410,7 +1452,9 @@ function Inbox() {
     const paused = !selected?.webhookPaused;
     if (
       paused &&
-      !confirm("Tirar este cliente do webhook? O bot não vai mais responder — use o WhatsApp do celular.")
+      !confirm(
+        "Ativar atendimento manual? O bot para de responder e você pode falar pelo CRM (mesmo se a conversa estava encerrada)."
+      )
     ) {
       return;
     }
@@ -1618,29 +1662,64 @@ function Inbox() {
                 )}
               </div>
             </div>
-            <div className="wa-thread" onClick={() => setMsgMenuId(null)}>
-              {messages.map((m) => (
-                <ChatBubble
-                  key={m.id}
-                  m={m}
-                  selectedName={selected.name || ""}
-                  selectedPhone={selected.phone}
-                  messages={messages}
-                  readOnly={readOnly}
-                  menuOpen={msgMenuId === m.id}
-                  onToggleMenu={() =>
-                    setMsgMenuId((cur) => (cur === m.id ? null : m.id))
-                  }
-                  onReply={() => startReply(m)}
-                  onCloseMenu={() => setMsgMenuId(null)}
-                  onLightbox={(src, type) => setLightbox({ src, type })}
-                />
-              ))}
-              <div ref={bottomRef} />
+            <div className="wa-thread-wrap">
+              <div
+                className="wa-thread"
+                ref={threadRef}
+                onScroll={onThreadScroll}
+                onClick={() => setMsgMenuId(null)}
+              >
+                {messages.map((m) => (
+                  <ChatBubble
+                    key={m.id}
+                    m={m}
+                    selectedName={selected.name || ""}
+                    selectedPhone={selected.phone}
+                    messages={messages}
+                    readOnly={readOnly}
+                    menuOpen={msgMenuId === m.id}
+                    onToggleMenu={() =>
+                      setMsgMenuId((cur) => (cur === m.id ? null : m.id))
+                    }
+                    onReply={() => startReply(m)}
+                    onCloseMenu={() => setMsgMenuId(null)}
+                    onLightbox={(src, type) => setLightbox({ src, type })}
+                  />
+                ))}
+                <div ref={bottomRef} />
+              </div>
+              {newBelowCount > 0 && (
+                <button
+                  type="button"
+                  className="wa-jump-latest"
+                  onClick={jumpToLatest}
+                  aria-label={`${newBelowCount} mensagens novas`}
+                >
+                  <span className="wa-jump-arrow" aria-hidden>
+                    ↓
+                  </span>
+                  <span className="wa-jump-badge">{newBelowCount > 99 ? "99+" : newBelowCount}</span>
+                </button>
+              )}
             </div>
             {error && <p className="wa-error pad">{error}</p>}
             {readOnly ? (
-              <div className="wa-readonly">Histórico — conversa encerrada</div>
+              <div className="wa-readonly">
+                Histórico — conversa encerrada
+                {user?.role === "admin" ? (
+                  <>
+                    {" · "}
+                    <button
+                      type="button"
+                      className="wa-readonly-link"
+                      disabled={busy}
+                      onClick={() => void toggleWebhookPause()}
+                    >
+                      Ativar atendimento manual
+                    </button>
+                  </>
+                ) : null}
+              </div>
             ) : (
               <div className="wa-composer-wrap">
                 {replyTo && (
