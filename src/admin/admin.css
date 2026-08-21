@@ -466,6 +466,58 @@
   font-size: 0.88rem;
 }
 
+.meta-profile-grid {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 1.25rem;
+  align-items: start;
+  margin-top: 0.75rem;
+}
+
+.meta-profile-photo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.meta-profile-photo img,
+.meta-profile-photo-empty {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--border, #333);
+  background: #1a1a1a;
+}
+
+.meta-profile-photo-empty {
+  display: grid;
+  place-items: center;
+  color: #888;
+  font-size: 0.8rem;
+}
+
+.meta-profile-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.meta-profile-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--muted, #888);
+}
+
+@media (max-width: 720px) {
+  .meta-profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .admin-error {
   color: var(--danger);
   margin: 0 0 0.65rem;

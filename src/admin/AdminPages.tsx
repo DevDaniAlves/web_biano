@@ -78,6 +78,27 @@ export function ConnectPage() {
   const [tplLang, setTplLang] = useState("pt_BR");
   const [tplBody, setTplBody] = useState("");
   const [tplMsg, setTplMsg] = useState("");
+  const [metaPhoneId, setMetaPhoneId] = useState("");
+  const [metaWabaId, setMetaWabaId] = useState("");
+  const [profileMsg, setProfileMsg] = useState("");
+  const [profilePhone, setProfilePhone] = useState<{
+    displayPhoneNumber: string | null;
+    verifiedName: string | null;
+    qualityRating: string | null;
+    status: string | null;
+  } | null>(null);
+  const [profile, setProfile] = useState({
+    about: "",
+    address: "",
+    description: "",
+    email: "",
+    vertical: "APPAREL",
+    websites: "",
+    profilePictureUrl: null as string | null,
+  });
+  const [managerUrl, setManagerUrl] = useState(
+    "https://business.facebook.com/latest/whatsapp_manager/phone_numbers/?tab=phone-numbers"
+  );
 
   async function load() {
     const row = await waApi.connection();
@@ -87,7 +108,105 @@ export function ConnectPage() {
   }
 
   async function loadMeta() {
-    setMetaInfo(await waApi.metaStatus());
+    const row = await waApi.metaStatus();
+    setMetaInfo(row);
+    setMetaPhoneId((prev) => prev || row.phoneNumberId || "");
+    setMetaWabaId((prev) => prev || row.wabaId || "");
+  }
+
+  async function loadMetaProfile() {
+    try {
+      const r = await waApi.metaProfile();
+      setProfilePhone(r.phone);
+      if (r.managerUrl) setManagerUrl(r.managerUrl);
+      if (r.profile) {
+        setProfile({
+          about: r.profile.about || "",
+          address: r.profile.address || "",
+          description: r.profile.description || "",
+          email: r.profile.email || "",
+          vertical: r.profile.vertical || "APPAREL",
+          websites: (r.profile.websites || []).join("\n"),
+          profilePictureUrl: r.profile.profilePictureUrl,
+        });
+      }
+    } catch (e) {
+      setProfileMsg(String((e as Error).message));
+    }
+  }
+
+  async function saveMetaIds() {
+    setMetaBusy(true);
+    setError("");
+    setProfileMsg("");
+    try {
+      await waApi.saveMetaSettings({
+        phoneNumberId: metaPhoneId.trim() || undefined,
+        wabaId: metaWabaId.trim() || undefined,
+      });
+      await loadMeta();
+      setProfileMsg("Phone Number ID / WABA salvos. Atualize também no Railway (.env).");
+      await loadMetaProfile();
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setMetaBusy(false);
+    }
+  }
+
+  async function saveProfile() {
+    setMetaBusy(true);
+    setProfileMsg("");
+    setError("");
+    try {
+      const r = await waApi.saveMetaProfile({
+        about: profile.about,
+        address: profile.address,
+        description: profile.description,
+        email: profile.email,
+        vertical: profile.vertical,
+        websites: profile.websites
+          .split(/[\n,]/)
+          .map((w) => w.trim())
+          .filter(Boolean),
+      });
+      if (r.profile) {
+        setProfile((p) => ({
+          ...p,
+          about: r.profile!.about || "",
+          address: r.profile!.address || "",
+          description: r.profile!.description || "",
+          email: r.profile!.email || "",
+          vertical: r.profile!.vertical || "APPAREL",
+          websites: (r.profile!.websites || []).join("\n"),
+          profilePictureUrl: r.profile!.profilePictureUrl,
+        }));
+      }
+      setProfileMsg("Perfil comercial atualizado na Meta.");
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setMetaBusy(false);
+    }
+  }
+
+  async function onProfilePhoto(file: File | null) {
+    if (!file) return;
+    setMetaBusy(true);
+    setProfileMsg("");
+    setError("");
+    try {
+      const r = await waApi.uploadMetaProfilePicture(file);
+      if (r.profile?.profilePictureUrl) {
+        setProfile((p) => ({ ...p, profilePictureUrl: r.profile!.profilePictureUrl }));
+      }
+      setProfileMsg("Foto de perfil enviada.");
+      await loadMetaProfile();
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setMetaBusy(false);
+    }
   }
 
   async function loadGupshup() {
@@ -143,6 +262,7 @@ export function ConnectPage() {
     loadMeta().catch(() => {});
     loadGupshup().catch(() => {});
     loadTemplates().catch(() => {});
+    loadMetaProfile().catch(() => {});
     loadHook().catch(() => {});
     const t = setInterval(() => {
       load().catch(() => {});
@@ -255,15 +375,39 @@ export function ConnectPage() {
         <strong>{providerLabel}</strong>
         {metaInfo?.configured ? " · credenciais OK" : " · configure token/Phone Number ID no .env"}
       </p>
-      {metaInfo && (
+      {profilePhone && (
         <p>
-          Phone Number ID: <code>{metaInfo.phoneNumberId || "—"}</code>
+          Número: <strong>{profilePhone.displayPhoneNumber || "—"}</strong>
           {" · "}
-          WABA: <code>{metaInfo.wabaId || "—"}</code>
+          Nome verificado: <strong>{profilePhone.verifiedName || "—"}</strong>
           {" · "}
-          Template boleto: <code>{metaInfo.boletoTemplate || "—"}</code>
+          Qualidade: <code>{profilePhone.qualityRating || "—"}</code>
+          {" · "}
+          Status: <code>{profilePhone.status || "—"}</code>
         </p>
       )}
+      <div className="admin-toolbar" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
+        <input
+          value={metaPhoneId}
+          onChange={(e) => setMetaPhoneId(e.target.value)}
+          placeholder="Phone Number ID (ex: 1236714352864758)"
+          style={{ maxWidth: "18rem" }}
+        />
+        <input
+          value={metaWabaId}
+          onChange={(e) => setMetaWabaId(e.target.value)}
+          placeholder="WABA ID (ex: 2142001143396659)"
+          style={{ maxWidth: "16rem" }}
+        />
+        <button
+          type="button"
+          className="ghost"
+          disabled={metaBusy || (!metaPhoneId.trim() && !metaWabaId.trim())}
+          onClick={() => void saveMetaIds()}
+        >
+          Salvar IDs Meta
+        </button>
+      </div>
       <div className="admin-toolbar">
         <button
           type="button"
@@ -296,6 +440,105 @@ export function ConnectPage() {
         >
           Usar Gupshup
         </button>
+      </div>
+
+      <h2 style={{ marginTop: "1.5rem" }}>Perfil comercial (Meta API)</h2>
+      <p className="lede">
+        Foto, sobre, descrição, e-mail, endereço, categoria e sites.{" "}
+        <strong>Nome de exibição</strong> e <strong>horário de funcionamento</strong> só no{" "}
+        <a href={managerUrl} target="_blank" rel="noreferrer">
+          WhatsApp Manager
+        </a>
+        .
+      </p>
+      {profileMsg && <p className="admin-hint-ok">{profileMsg}</p>}
+      <div className="meta-profile-grid">
+        <div className="meta-profile-photo">
+          {profile.profilePictureUrl ? (
+            <img src={profile.profilePictureUrl} alt="Foto do perfil WhatsApp" />
+          ) : (
+            <div className="meta-profile-photo-empty">Sem foto</div>
+          )}
+          <label className="ghost" style={{ cursor: "pointer" }}>
+            Trocar foto
+            <input
+              type="file"
+              accept="image/*"
+              hidden
+              disabled={metaBusy}
+              onChange={(e) => void onProfilePhoto(e.target.files?.[0] ?? null)}
+            />
+          </label>
+        </div>
+        <div className="meta-profile-fields">
+          <label>
+            Sobre (máx. 139)
+            <input
+              value={profile.about}
+              maxLength={139}
+              onChange={(e) => setProfile((p) => ({ ...p, about: e.target.value }))}
+              placeholder="Moda jovem Calangus"
+            />
+          </label>
+          <label>
+            Descrição (máx. 512)
+            <textarea
+              value={profile.description}
+              maxLength={512}
+              rows={3}
+              onChange={(e) => setProfile((p) => ({ ...p, description: e.target.value }))}
+              placeholder="Loja de moda jovem…"
+            />
+          </label>
+          <label>
+            E-mail
+            <input
+              value={profile.email}
+              onChange={(e) => setProfile((p) => ({ ...p, email: e.target.value }))}
+              placeholder="contato@calangusmodajovem.com"
+            />
+          </label>
+          <label>
+            Endereço
+            <input
+              value={profile.address}
+              onChange={(e) => setProfile((p) => ({ ...p, address: e.target.value }))}
+              placeholder="Rua…, Cuiabá - MT"
+            />
+          </label>
+          <label>
+            Categoria
+            <select
+              value={profile.vertical}
+              onChange={(e) => setProfile((p) => ({ ...p, vertical: e.target.value }))}
+            >
+              <option value="APPAREL">Roupas e vestuário</option>
+              <option value="RETAIL">Varejo / shopping</option>
+              <option value="BEAUTY">Beleza</option>
+              <option value="OTHER">Outro</option>
+            </select>
+          </label>
+          <label>
+            Sites (1 por linha, máx. 2)
+            <textarea
+              value={profile.websites}
+              rows={2}
+              onChange={(e) => setProfile((p) => ({ ...p, websites: e.target.value }))}
+              placeholder={"https://instagram.com/...\nhttps://webbiano-production.up.railway.app"}
+            />
+          </label>
+          <div className="admin-toolbar">
+            <button type="button" disabled={metaBusy} onClick={() => void saveProfile()}>
+              Salvar perfil
+            </button>
+            <button type="button" className="ghost" disabled={metaBusy} onClick={() => void loadMetaProfile()}>
+              Recarregar
+            </button>
+            <a className="ghost" href={managerUrl} target="_blank" rel="noreferrer" style={{ padding: "0.45rem 0.75rem" }}>
+              Nome / horário no Manager
+            </a>
+          </div>
+        </div>
       </div>
       {!gupshupInfo?.configured && (
         <p className="admin-hint-ok">

@@ -335,6 +335,77 @@ export const waApi = {
       boletoTemplate: string | null;
       boletoTemplateLang?: string | null;
     }>("/whatsapp/meta/status"),
+  saveMetaSettings: (data: { phoneNumberId?: string; wabaId?: string }) =>
+    request<{ ok: boolean; phoneNumberId: string | null; wabaId: string | null }>(
+      "/whatsapp/meta/settings",
+      { method: "POST", body: JSON.stringify(data) }
+    ),
+  metaProfile: () =>
+    request<{
+      profile: {
+        about: string;
+        address: string;
+        description: string;
+        email: string;
+        vertical: string;
+        websites: string[];
+        profilePictureUrl: string | null;
+      } | null;
+      phone: {
+        displayPhoneNumber: string | null;
+        verifiedName: string | null;
+        qualityRating: string | null;
+        status: string | null;
+      } | null;
+      managerUrl: string;
+      note: string;
+    }>("/whatsapp/meta/profile"),
+  saveMetaProfile: (data: {
+    about?: string;
+    address?: string;
+    description?: string;
+    email?: string;
+    vertical?: string;
+    websites?: string[];
+  }) =>
+    request<{
+      ok: boolean;
+      profile: {
+        about: string;
+        address: string;
+        description: string;
+        email: string;
+        vertical: string;
+        websites: string[];
+        profilePictureUrl: string | null;
+      } | null;
+    }>("/whatsapp/meta/profile", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  uploadMetaProfilePicture: async (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API}/whatsapp/meta/profile/picture`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
+    return data as {
+      ok: boolean;
+      profile: {
+        about: string;
+        address: string;
+        description: string;
+        email: string;
+        vertical: string;
+        websites: string[];
+        profilePictureUrl: string | null;
+      } | null;
+    };
+  },
   gupshupStatus: () =>
     request<{
       provider: "meta" | "evolution" | "gupshup";
