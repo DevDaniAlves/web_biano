@@ -383,6 +383,24 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+  align-items: center;
+}
+
+.wa-assume-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.wa-assume-picker select {
+  max-width: 11rem;
+  padding: 0.3rem 0.45rem;
+  border-radius: 8px;
+  border: 1px solid var(--wa-border, #ccc);
+  background: var(--wa-panel, #fff);
+  color: inherit;
+  font-size: 0.75rem;
 }
 
 .wa-actions button {

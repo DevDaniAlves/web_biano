@@ -1074,6 +1074,8 @@ function Inbox() {
   const [error, setError] = useState("");
   const [saveContactOpen, setSaveContactOpen] = useState(false);
   const [saveContactDraft, setSaveContactDraft] = useState("");
+  const [assumeOpen, setAssumeOpen] = useState(false);
+  const [assumeTarget, setAssumeTarget] = useState("");
   const [newBelowCount, setNewBelowCount] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -1108,6 +1110,8 @@ function Inbox() {
     setAttachOpen(false);
     setReplyTo(null);
     setMsgMenuId(null);
+    setAssumeOpen(false);
+    setSaveContactOpen(false);
     if (recording || recRef.current) {
       recCancelRef.current = true;
       recRef.current?.stop();
@@ -1593,6 +1597,23 @@ function Inbox() {
     }
   }
 
+  async function assumeConversation() {
+    if (!selectedId || !user || !assumeTarget) return;
+    setBusy(true);
+    setError("");
+    try {
+      const contact = await waApi.assign(selectedId, assumeTarget);
+      setSelectedFlags(contact);
+      setAssumeOpen(false);
+      await refreshContacts();
+      await refreshMessages(selectedId, true);
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function restartBot() {
     if (!selectedId) return;
     if (!confirm("Reiniciar este cliente no menu do bot?")) return;
@@ -1792,10 +1813,69 @@ function Inbox() {
                   {selected.hasSavedContact && selected.pushName && selected.pushName !== selected.savedName
                     ? ` · WhatsApp: ${selected.pushName}`
                     : ""}
+                  {selected.assignedTo?.name ? ` · Com: ${selected.assignedTo.name}` : ""}
                   {selected.rating != null ? ` · Nota ${selected.rating}` : ""}
                 </span>
               </div>
               <div className="wa-actions">
+                {user?.role === "admin" &&
+                  !selected.webhookPaused &&
+                  flags?.status !== "closed" &&
+                  flags?.status !== "awaiting_rating" &&
+                  (assumeOpen ? (
+                    <div className="wa-assume-picker">
+                      <select
+                        value={assumeTarget}
+                        onChange={(e) => setAssumeTarget(e.target.value)}
+                        aria-label="Quem assume"
+                        disabled={busy}
+                      >
+                        {user && (
+                          <option value={user.id}>Eu — {user.name}</option>
+                        )}
+                        {sellers
+                          .filter((s) => s.role === "seller" && s.active !== false && s.id !== user?.id)
+                          .map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={busy || !assumeTarget}
+                        onClick={() => void assumeConversation()}
+                      >
+                        Confirmar
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost"
+                        disabled={busy}
+                        onClick={() => setAssumeOpen(false)}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        setAssumeTarget(user?.id ?? "");
+                        setAssumeOpen(true);
+                        if (user?.role === "admin" && sellers.length === 0) {
+                          waApi.users().then(setSellers).catch(() => {});
+                        }
+                      }}
+                    >
+                      {flags?.status === "human" && selected.assignedTo?.id === user?.id
+                        ? "Reatribuir"
+                        : flags?.status === "human" && selected.assignedTo
+                          ? "Transferir / assumir"
+                          : "Assumir"}
+                    </button>
+                  ))}
                 {user?.role === "admin" && (
                   <button type="button" className="ghost" disabled={busy} onClick={() => void toggleWebhookPause()}>
                     {selected.webhookPaused ? "Voltar ao webhook" : "Atendimento manual"}
