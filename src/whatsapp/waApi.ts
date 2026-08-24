@@ -25,6 +25,8 @@ export interface WaUser {
   email: string;
   role: "admin" | "seller";
   active?: boolean;
+  /** Vê todas as conversas (sem recorte) e pode assumir para histórico. */
+  seeAllMessages?: boolean;
 }
 
 export type ContactStatus = "bot" | "waiting" | "human" | "awaiting_rating" | "closed";
@@ -231,7 +233,13 @@ export const waApi = {
       body: JSON.stringify({ name }),
     }),
   users: () => request<WaUser[]>("/whatsapp/users"),
-  createUser: (data: { name: string; email: string; password: string; role?: string }) =>
+  createUser: (data: {
+    name: string;
+    email: string;
+    password: string;
+    role?: string;
+    seeAllMessages?: boolean;
+  }) =>
     request<WaUser>("/whatsapp/users", {
       method: "POST",
       body: JSON.stringify(data),
@@ -241,7 +249,7 @@ export const waApi = {
       method: "PATCH",
       body: JSON.stringify({ active }),
     }),
-  updateUser: (id: string, data: { name?: string; active?: boolean }) =>
+  updateUser: (id: string, data: { name?: string; active?: boolean; seeAllMessages?: boolean }) =>
     request<WaUser>(`/whatsapp/users/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),

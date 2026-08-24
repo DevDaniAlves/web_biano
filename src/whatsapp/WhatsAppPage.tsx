@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState, type FormEvent, type TouchEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { clearSession, getStoredUser, getToken } from "../auth";
+import { clearSession, getStoredUser, getToken, setSession } from "../auth";
 import ChangePasswordDialog from "../components/ChangePasswordDialog";
 import PushPermissionBanner from "../components/PushPermissionBanner";
 import { disablePushNotifications, showForegroundNotification, syncAppBadgeFromServer, bindPushResumeRefresh, enablePushNotifications } from "../push";
@@ -14,6 +14,10 @@ import {
   type WaUser,
 } from "./waApi";
 import "./whatsapp.css";
+
+function canSeeAllMessages(user: WaUser | null | undefined) {
+  return user?.role === "admin" || Boolean(user?.seeAllMessages);
+}
 
 function mediaSrc(url: string | null) {
   if (!url) return null;
@@ -769,6 +773,7 @@ export function UsersTab() {
               <th>Nome</th>
               <th>E-mail</th>
               <th>Perfil</th>
+              <th>Ver todas</th>
               <th>Status</th>
               <th />
             </tr>
@@ -810,6 +815,23 @@ export function UsersTab() {
                   <span className={`admin-pill${u.role === "admin" ? " role-admin" : " ok"}`}>
                     {u.role === "admin" ? "Admin" : "Vendedor"}
                   </span>
+                </td>
+                <td>
+                  {u.role === "admin" ? (
+                    <span className="admin-pill ok">Sim (admin)</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() =>
+                        void waApi
+                          .updateUser(u.id, { seeAllMessages: !u.seeAllMessages })
+                          .then(() => load())
+                      }
+                    >
+                      {u.seeAllMessages ? "Sim — desligar" : "Não — ligar"}
+                    </button>
+                  )}
                 </td>
                 <td>
                   <span className={`admin-pill${u.active === false ? "" : " ok"}`}>
@@ -1025,7 +1047,8 @@ export function UsersTab() {
 }
 
 function Inbox() {
-  const user = getStoredUser();
+  const [user, setUser] = useState(() => getStoredUser());
+  const seeAll = canSeeAllMessages(user);
   const [params] = useSearchParams();
   const contactParam = params.get("contact");
   const [contacts, setContacts] = useState<WaContact[]>([]);
@@ -1035,7 +1058,7 @@ function Inbox() {
   const [selectedFlags, setSelectedFlags] = useState<WaContact | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState(() =>
-    getStoredUser()?.role === "admin" ? "" : "active"
+    canSeeAllMessages(getStoredUser()) ? "" : "active"
   );
   const [sellerId, setSellerId] = useState("");
   const [sellers, setSellers] = useState<WaUser[]>([]);
@@ -1043,6 +1066,7 @@ function Inbox() {
   const [replyTo, setReplyTo] = useState<WaMessage | null>(null);
   const [msgMenuId, setMsgMenuId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [finishing, setFinishing] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -1058,6 +1082,7 @@ function Inbox() {
   const galleryRef = useRef<HTMLInputElement>(null);
   /** Trava síncrona — evita Enter/clique duplo antes do setState. */
   const sendingRef = useRef(false);
+  const finishingRef = useRef(false);
   const recRef = useRef<MediaRecorder | null>(null);
   const recStreamRef = useRef<MediaStream | null>(null);
   const recCancelRef = useRef(false);
@@ -1071,7 +1096,7 @@ function Inbox() {
     const list = await waApi.contacts({
       search: search || undefined,
       status: status || undefined,
-      sellerId: user?.role === "admin" ? sellerId || undefined : undefined,
+      sellerId: seeAll ? sellerId || undefined : undefined,
     });
     setContacts(list);
     void syncAppBadgeFromServer();
@@ -1089,6 +1114,7 @@ function Inbox() {
       setRecording(false);
     }
     try {
+      // Admin só supervisiona (peek). seeAllMessages assume ao abrir (registra histórico).
       const r = await waApi.messages(id, { peek: user?.role === "admin" });
       setMessages(
         sortThread(dedupeOutMessages(r.messages.map((m) => ({ ...m, delivery: "sent" as const }))))
@@ -1115,9 +1141,24 @@ function Inbox() {
   }
 
   useEffect(() => {
-    if (user?.role !== "admin") return;
+    waApi
+      .me()
+      .then(({ user: u }) => {
+        const token = getToken();
+        if (!token) return;
+        setSession(token, u);
+        setUser(u);
+        if (canSeeAllMessages(u) && status === "active") {
+          setStatus("");
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!seeAll) return;
     waApi.users().then(setSellers).catch(() => {});
-  }, [user?.role]);
+  }, [seeAll]);
 
   useEffect(() => {
     refreshContacts().catch((e) => setError(String(e.message)));
@@ -1125,7 +1166,7 @@ function Inbox() {
       refreshContacts().catch(() => {});
     }, 8000);
     return () => clearInterval(t);
-  }, [search, status, sellerId]);
+  }, [search, status, sellerId, seeAll]);
 
   useEffect(() => {
     if (contactParam) void openContact(contactParam);
@@ -1188,6 +1229,8 @@ function Inbox() {
     stickToBottomRef.current = true;
     setNewBelowCount(0);
     knownMsgIdsRef.current = new Set();
+    finishingRef.current = false;
+    setFinishing(false);
   }, [selectedId]);
 
   useEffect(() => {
@@ -1426,10 +1469,22 @@ function Inbox() {
   }
 
   async function finish() {
-    if (!selectedId) return;
-    await waApi.resolve(selectedId);
-    await refreshMessages(selectedId, true);
-    await refreshContacts();
+    if (!selectedId || finishingRef.current || busy) return;
+    finishingRef.current = true;
+    setFinishing(true);
+    setBusy(true);
+    setError("");
+    try {
+      await waApi.resolve(selectedId);
+      await refreshMessages(selectedId, true);
+      await refreshContacts();
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      finishingRef.current = false;
+      setFinishing(false);
+      setBusy(false);
+    }
   }
 
   async function restartBot() {
@@ -1497,7 +1552,7 @@ function Inbox() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          {user?.role === "admin" && (
+          {seeAll && (
             <select
               className="wa-seller-filter"
               value={sellerId}
@@ -1517,7 +1572,7 @@ function Inbox() {
           <div className="wa-filters">
             {[
               { v: "active", l: "Atendimento" },
-              ...(user?.role === "admin"
+              ...(seeAll
                 ? [
                     { v: "bot", l: "Bot" },
                     { v: "manual", l: "Manual" },
@@ -1646,18 +1701,42 @@ function Inbox() {
                   </button>
                 )}
                 {flags?.canWarnInactivity && !readOnly && !selected.webhookPaused && (
-                  <button type="button" className="ghost" onClick={() => void warnIdle()}>
+                  <button type="button" className="ghost" disabled={busy || finishing} onClick={() => void warnIdle()}>
                     Avisar inatividade
                   </button>
                 )}
                 {flags?.status === "human" && !readOnly && !selected.webhookPaused && (
-                  <button type="button" onClick={() => void finish()}>
-                    Finalizar
+                  <button
+                    type="button"
+                    className={finishing ? "wa-finishing" : ""}
+                    disabled={busy || finishing}
+                    onClick={() => void finish()}
+                  >
+                    {finishing ? (
+                      <>
+                        <span className="wa-btn-spinner" aria-hidden />
+                        Finalizando…
+                      </>
+                    ) : (
+                      "Finalizar"
+                    )}
                   </button>
                 )}
                 {flags?.canResolveInactivity && !readOnly && !selected.webhookPaused && (
-                  <button type="button" onClick={() => void finish()}>
-                    Finalizar por inatividade
+                  <button
+                    type="button"
+                    className={finishing ? "wa-finishing" : ""}
+                    disabled={busy || finishing}
+                    onClick={() => void finish()}
+                  >
+                    {finishing ? (
+                      <>
+                        <span className="wa-btn-spinner" aria-hidden />
+                        Finalizando…
+                      </>
+                    ) : (
+                      "Finalizar por inatividade"
+                    )}
                   </button>
                 )}
               </div>
