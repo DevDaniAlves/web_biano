@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import AdminLayout from "./admin/AdminLayout";
-import { CatalogAdminPage, ConnectPage, ReportsPage } from "./admin/AdminPages";
+import { CatalogAdminPage, ConnectPage, GalleryAdminPage, ReportsPage } from "./admin/AdminPages";
 import GestorApp from "./gestor/GestorApp";
 import LoginPage, { RequireAuth } from "./pages/LoginPage";
 import MetaEmbeddedCallback from "./pages/MetaEmbeddedCallback";
@@ -41,6 +41,7 @@ export default function App() {
         <Route path="whatsapp/conectar" element={<ConnectPage />} />
         <Route path="whatsapp/usuarios" element={<UsersTab />} />
         <Route path="catalogo" element={<CatalogAdminPage />} />
+        <Route path="galeria" element={<GalleryAdminPage />} />
         <Route path="gestor" element={<GestorApp embedded />} />
       </Route>
       <Route path="/gestor" element={<Navigate to="/admin/gestor" replace />} />

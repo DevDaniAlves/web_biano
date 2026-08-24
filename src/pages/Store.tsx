@@ -27,8 +27,20 @@ function sellerMessage(keyword: string, productName?: string) {
   ].join("\n");
 }
 
+function storeMediaSrc(url: string) {
+  if (!url) return "";
+  if (/^https?:\/\//i.test(url) || url.startsWith("blob:")) return url;
+  const base = import.meta.env.VITE_API_URL ?? "";
+  const path = url.startsWith("/") ? url : `/${url}`;
+  if (base && !base.startsWith("/")) return `${base.replace(/\/$/, "")}${path}`;
+  return path;
+}
+
 export function Store() {
   const [products, setProducts] = useState<CatalogProduct[]>([]);
+  const [gallery, setGallery] = useState<Array<{ id: string; imageUrl: string; caption: string | null }>>(
+    []
+  );
   const [mode, setMode] = useState<"wa_me" | "form">("wa_me");
   const [waPhone, setWaPhone] = useState<string | null>(null);
   const [keyword, setKeyword] = useState("catalogo");
@@ -38,6 +50,7 @@ export function Store() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState<string | null>(null);
 
   useEffect(() => {
     waApi.catalogConfig().then((c) => {
@@ -46,6 +59,7 @@ export function Store() {
       if (c.keyword) setKeyword(c.keyword);
     }).catch(() => {});
     waApi.catalogProducts().then(setProducts).catch(() => {});
+    waApi.catalogGallery().then(setGallery).catch(() => {});
   }, []);
 
   const generalWa =
@@ -131,6 +145,31 @@ export function Store() {
         )}
       </section>
 
+      {gallery.length > 0 ? (
+        <section id="galeria" className="store-gallery">
+          <div className="catalog-head">
+            <h2>Galeria</h2>
+            <p>Looks e peças do dia a dia na Calangus.</p>
+          </div>
+          <div className="store-gallery-grid">
+            {gallery.map((g, i) => {
+              const src = storeMediaSrc(g.imageUrl);
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  className="store-gallery-item"
+                  style={{ animationDelay: `${0.04 * i}s` }}
+                  onClick={() => setGalleryOpen(src)}
+                >
+                  <img src={src} alt={g.caption || "Foto da loja"} loading="lazy" />
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
       <section id="contato" className="contact-section">
         <div className="catalog-head">
           <h2>Entrar em contato</h2>
@@ -182,6 +221,17 @@ export function Store() {
         <img src="/brand/logo-circle.png" alt="" width={36} height={36} />
         <span>Calangus Moda Jovem</span>
       </footer>
+
+      {galleryOpen && (
+        <button
+          type="button"
+          className="store-gallery-lightbox"
+          onClick={() => setGalleryOpen(null)}
+          aria-label="Fechar foto"
+        >
+          <img src={galleryOpen} alt="" />
+        </button>
+      )}
     </div>
   );
 }

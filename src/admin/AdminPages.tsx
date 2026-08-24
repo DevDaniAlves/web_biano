@@ -1036,3 +1036,203 @@ export function CatalogAdminPage() {
     </div>
   );
 }
+
+function galleryMediaSrc(url: string) {
+  if (!url) return "";
+  if (/^https?:\/\//i.test(url) || url.startsWith("blob:")) return url;
+  const base = import.meta.env.VITE_API_URL ?? "";
+  const path = url.startsWith("/") ? url : `/${url}`;
+  if (base && !base.startsWith("/")) return `${base.replace(/\/$/, "")}${path}`;
+  return path;
+}
+
+type GalleryRow = {
+  id: string;
+  imageUrl: string;
+  caption: string | null;
+  status: "pending" | "approved" | "rejected";
+  sortOrder: number;
+  createdAt: string;
+  submittedBy: { id: string; name: string } | null;
+  reviewedBy: { id: string; name: string } | null;
+  reviewedAt: string | null;
+};
+
+/** Aprova fotos de vendedores para a galeria da LP. */
+export function GalleryAdminPage() {
+  const [filter, setFilter] = useState<"pending" | "approved" | "rejected" | "">("pending");
+  const [items, setItems] = useState<GalleryRow[]>([]);
+  const [error, setError] = useState("");
+  const [lightbox, setLightbox] = useState<string | null>(null);
+
+  async function load() {
+    setItems(await waApi.adminGallery(filter));
+  }
+
+  useEffect(() => {
+    load().catch((e) => setError(String(e.message)));
+  }, [filter]);
+
+  async function setStatus(id: string, status: "approved" | "rejected" | "pending") {
+    setError("");
+    try {
+      await waApi.updateGalleryImage(id, { status });
+      await load();
+    } catch (err) {
+      setError(String((err as Error).message));
+    }
+  }
+
+  return (
+    <div className="admin-panel">
+      <div className="admin-panel-head">
+        <h1>Galeria da loja</h1>
+      </div>
+      <p className="lede" style={{ marginTop: 0 }}>
+        Fotos enviadas pelos vendedores no atendimento entram como{" "}
+        <strong>pendentes</strong>. Aprove produto/estilo para a LP; rejeite comprovante e
+        documentos.
+      </p>
+      {error && <p className="admin-error">{error}</p>}
+      <div className="admin-toolbar" style={{ flexWrap: "wrap" }}>
+        {(
+          [
+            { v: "pending" as const, l: "Pendentes" },
+            { v: "approved" as const, l: "Aprovadas" },
+            { v: "rejected" as const, l: "Rejeitadas" },
+            { v: "" as const, l: "Todas" },
+          ] as const
+        ).map((f) => (
+          <button
+            key={f.v || "all"}
+            type="button"
+            className={filter === f.v ? "" : "ghost"}
+            onClick={() => setFilter(f.v)}
+          >
+            {f.l}
+          </button>
+        ))}
+      </div>
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th />
+              <th>Legenda</th>
+              <th>Vendedor</th>
+              <th>Status</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((g) => (
+              <tr key={g.id}>
+                <td>
+                  <button
+                    type="button"
+                    className="ghost"
+                    style={{ padding: 0 }}
+                    onClick={() => setLightbox(galleryMediaSrc(g.imageUrl))}
+                  >
+                    <img className="admin-thumb" src={galleryMediaSrc(g.imageUrl)} alt="" />
+                  </button>
+                </td>
+                <td>
+                  <div style={{ color: "var(--muted)", fontSize: "0.78rem" }}>
+                    {g.caption || "—"}
+                  </div>
+                  <div style={{ color: "var(--muted)", fontSize: "0.72rem" }}>
+                    {new Date(g.createdAt).toLocaleString("pt-BR")}
+                  </div>
+                </td>
+                <td>{g.submittedBy?.name ?? "—"}</td>
+                <td>
+                  <span
+                    className={`admin-pill${
+                      g.status === "approved" ? " ok" : g.status === "pending" ? " warn" : ""
+                    }`}
+                  >
+                    {g.status === "approved"
+                      ? "Na LP"
+                      : g.status === "pending"
+                        ? "Pendente"
+                        : "Rejeitada"}
+                  </span>
+                </td>
+                <td>
+                  <div className="actions">
+                    {g.status !== "approved" && (
+                      <button type="button" onClick={() => void setStatus(g.id, "approved")}>
+                        Aprovar
+                      </button>
+                    )}
+                    {g.status !== "rejected" && (
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() => void setStatus(g.id, "rejected")}
+                      >
+                        Rejeitar
+                      </button>
+                    )}
+                    {g.status !== "pending" && (
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() => void setStatus(g.id, "pending")}
+                      >
+                        Voltar pendente
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() =>
+                        void waApi.deleteGalleryImage(g.id).then(load).catch((e) => {
+                          setError(String((e as Error).message));
+                        })
+                      }
+                    >
+                      Remover
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {items.length === 0 && (
+              <tr>
+                <td colSpan={5} style={{ color: "var(--muted)" }}>
+                  Nenhuma foto neste filtro.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {lightbox && (
+        <button
+          type="button"
+          className="ghost"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 80,
+            background: "rgba(0,0,0,0.82)",
+            display: "grid",
+            placeItems: "center",
+            border: "none",
+            cursor: "zoom-out",
+          }}
+          onClick={() => setLightbox(null)}
+          aria-label="Fechar"
+        >
+          <img
+            src={lightbox}
+            alt=""
+            style={{ maxWidth: "92vw", maxHeight: "88vh", objectFit: "contain" }}
+          />
+        </button>
+      )}
+    </div>
+  );
+}

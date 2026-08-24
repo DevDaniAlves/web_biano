@@ -515,6 +515,8 @@ export const waApi = {
       "/catalog/config"
     ),
   catalogProducts: () => request<CatalogProduct[]>("/catalog/products"),
+  catalogGallery: () =>
+    request<Array<{ id: string; imageUrl: string; caption: string | null }>>("/catalog/gallery"),
   catalogLead: (data: { name: string; phone: string; message?: string }) =>
     request<{ ok: boolean }>("/catalog/leads", {
       method: "POST",
@@ -538,4 +540,30 @@ export const waApi = {
     }),
   deleteProduct: (id: string) =>
     request(`/catalog/admin/products/${id}`, { method: "DELETE" }),
+  adminGallery: (status?: "pending" | "approved" | "rejected" | "") => {
+    const q = status ? `?status=${encodeURIComponent(status)}` : "";
+    return request<
+      Array<{
+        id: string;
+        imageUrl: string;
+        caption: string | null;
+        status: "pending" | "approved" | "rejected";
+        sortOrder: number;
+        createdAt: string;
+        submittedBy: { id: string; name: string } | null;
+        reviewedBy: { id: string; name: string } | null;
+        reviewedAt: string | null;
+      }>
+    >(`/catalog/admin/gallery${q}`);
+  },
+  updateGalleryImage: (
+    id: string,
+    data: { status?: "pending" | "approved" | "rejected"; sortOrder?: number; caption?: string | null }
+  ) =>
+    request(`/catalog/admin/gallery/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  deleteGalleryImage: (id: string) =>
+    request(`/catalog/admin/gallery/${id}`, { method: "DELETE" }),
 };

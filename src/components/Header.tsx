@@ -16,6 +16,7 @@ export function Header() {
       </Link>
       <nav className="store-nav">
         <a href="#catalogo">Catálogo</a>
+        <a href="#galeria">Galeria</a>
         <a href="#contato">Contato</a>
         <button type="button" className="theme-toggle" onClick={toggle} aria-label="Alternar tema">
           {theme === "dark" ? "Claro" : "Escuro"}
