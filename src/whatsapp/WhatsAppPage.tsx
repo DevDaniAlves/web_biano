@@ -886,10 +886,6 @@ export function UsersTab() {
                 <td>
                   {u.role === "admin" ? (
                     <span className="admin-pill">—</span>
-                  ) : u.seeAllMessages ? (
-                    <span className="admin-pill" title="Ver todas remove da lista do bot">
-                      Não (ver todas)
-                    </span>
                   ) : (
                     <button
                       type="button"
