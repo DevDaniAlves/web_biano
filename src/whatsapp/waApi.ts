@@ -262,6 +262,7 @@ export const waApi = {
     data: {
       name?: string;
       active?: boolean;
+      role?: "admin" | "seller";
       seeAllMessages?: boolean;
       showInAttendantList?: boolean;
     }

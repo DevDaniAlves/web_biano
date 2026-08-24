@@ -680,6 +680,7 @@ export function UsersTab() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [createRole, setCreateRole] = useState<"seller" | "admin">("seller");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -746,10 +747,19 @@ export function UsersTab() {
         className="admin-toolbar"
         onSubmit={async (e: FormEvent) => {
           e.preventDefault();
-          await waApi.createUser({ name: name.trim(), email, password, role: "seller" });
+          await waApi.createUser({
+            name: name.trim(),
+            email,
+            password,
+            role: createRole,
+            ...(createRole === "admin"
+              ? { seeAllMessages: true, showInAttendantList: false }
+              : {}),
+          });
           setName("");
           setEmail("");
           setPassword("");
+          setCreateRole("seller");
           await load();
         }}
       >
@@ -766,7 +776,15 @@ export function UsersTab() {
           placeholder="Senha"
           required
         />
-        <button type="submit">Criar vendedor</button>
+        <select
+          value={createRole}
+          onChange={(e) => setCreateRole(e.target.value as "seller" | "admin")}
+          aria-label="Perfil"
+        >
+          <option value="seller">Vendedor</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button type="submit">Criar usuário</button>
       </form>
       <div className="admin-table-wrap">
         <table className="admin-table">
@@ -815,9 +833,36 @@ export function UsersTab() {
                 </td>
                 <td>{u.email}</td>
                 <td>
-                  <span className={`admin-pill${u.role === "admin" ? " role-admin" : " ok"}`}>
-                    {u.role === "admin" ? "Admin" : "Vendedor"}
-                  </span>
+                  <button
+                    type="button"
+                    className="ghost"
+                    disabled={u.id === getStoredUser()?.id && u.role === "admin"}
+                    title={
+                      u.id === getStoredUser()?.id && u.role === "admin"
+                        ? "Você não pode remover seu próprio admin"
+                        : u.role === "admin"
+                          ? "Tornar vendedor"
+                          : "Tornar admin (acesso ao painel)"
+                    }
+                    onClick={() => {
+                      const next = u.role === "admin" ? "seller" : "admin";
+                      if (
+                        next === "admin" &&
+                        !confirm(`Dar acesso de admin a ${u.name}? Ele verá o painel completo.`)
+                      ) {
+                        return;
+                      }
+                      if (
+                        next === "seller" &&
+                        !confirm(`Remover admin de ${u.name}? Ele volta a ser só vendedor.`)
+                      ) {
+                        return;
+                      }
+                      void waApi.updateUser(u.id, { role: next }).then(() => load());
+                    }}
+                  >
+                    {u.role === "admin" ? "Admin — rebaixar" : "Vendedor — promover"}
+                  </button>
                 </td>
                 <td>
                   {u.role === "admin" ? (
@@ -877,7 +922,7 @@ export function UsersTab() {
                       Editar nome
                     </button>
                   )}
-                  {u.role !== "admin" && (
+                  {u.id !== getStoredUser()?.id && (
                     <button
                       type="button"
                       className="ghost"

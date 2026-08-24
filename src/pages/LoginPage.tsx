@@ -1,4 +1,4 @@
-import { FormEvent, useState, type ReactNode } from "react";
+import { FormEvent, useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { getStoredUser, getToken, homePathForSession, isStandaloneDisplay, setSession } from "../auth";
 import { enablePushNotifications } from "../push";
@@ -127,8 +127,35 @@ export function RequireAuth({
   role?: "admin" | "seller";
 }) {
   const token = getToken();
-  const user = getStoredUser();
-  if (!token || !user) return <Navigate to="/login" replace />;
+  const stored = getStoredUser();
+  const [user, setUser] = useState(stored);
+  const [checking, setChecking] = useState(Boolean(token && role === "admin"));
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    waApi
+      .me()
+      .then(({ user: u }) => {
+        if (cancelled) return;
+        setSession(token, u);
+        setUser(u);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setUser(null);
+      })
+      .finally(() => {
+        if (!cancelled) setChecking(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, role]);
+
+  if (!token || (!user && !checking)) return <Navigate to="/login" replace />;
+  if (checking) return null;
+  if (!user) return <Navigate to="/login" replace />;
   if (role === "admin" && user.role !== "admin") {
     return <Navigate to="/atendimento" replace />;
   }
