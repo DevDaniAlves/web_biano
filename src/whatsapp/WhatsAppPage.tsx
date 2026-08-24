@@ -1423,6 +1423,62 @@ function Inbox() {
     recRef.current = null;
   }
 
+  function micErrorMessage(err: unknown): string {
+    const name = err instanceof DOMException ? err.name : "";
+    const msg = err instanceof Error ? err.message : String(err);
+    if (name === "NotAllowedError" || name === "PermissionDeniedError" || msg === "MIC_DENIED") {
+      return "Microfone bloqueado. Permita o microfone neste site (cadeado/ícone na barra do navegador ou Ajustes do app) e toque em gravar de novo.";
+    }
+    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+      return "Nenhum microfone encontrado neste aparelho.";
+    }
+    if (msg === "MIC_MUTED") {
+      return "Microfone mudo ou sem som. Desative o mudo, autorize o microfone e grave novamente.";
+    }
+    if (msg === "MIC_SILENT") {
+      return "Áudio sem som capturado. Autorize o microfone (ou fale mais perto) e grave de novo.";
+    }
+    if (msg === "MIC_SHORT") {
+      return "Áudio muito curto. Segure a gravação por pelo menos 1 segundo.";
+    }
+    return msg || "Não foi possível gravar o áudio";
+  }
+
+  async function requestMicStream(): Promise<MediaStream> {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("Este navegador não permite gravar áudio.");
+    }
+    try {
+      const perm = await navigator.permissions.query({ name: "microphone" as PermissionName });
+      if (perm.state === "denied") throw new Error("MIC_DENIED");
+    } catch (e) {
+      if (e instanceof Error && e.message === "MIC_DENIED") throw e;
+      // Permissions API indisponível (ex.: Safari) — segue no getUserMedia
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+    const track = stream.getAudioTracks()[0];
+    if (!track || track.readyState !== "live") {
+      stream.getTracks().forEach((t) => t.stop());
+      throw new Error("MIC_DENIED");
+    }
+    if (!track.enabled) track.enabled = true;
+    // Alguns browsers marcam muted no 1º instante
+    if (track.muted) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    if (track.muted) {
+      stream.getTracks().forEach((t) => t.stop());
+      throw new Error("MIC_MUTED");
+    }
+    return stream;
+  }
+
   async function toggleRecord() {
     if (recording) {
       recRef.current?.stop();
@@ -1430,9 +1486,38 @@ function Inbox() {
       return;
     }
     if (readOnly || busy || sendingRef.current) return;
+    setError("");
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await requestMicStream();
       recStreamRef.current = stream;
+
+      // Medidor simples: rejeita gravação sem nível de áudio (mic bloqueado/mudo)
+      let peak = 0;
+      let levelStop = () => {};
+      try {
+        const AudioCtx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          const src = ctx.createMediaStreamSource(stream);
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 256;
+          src.connect(analyser);
+          const data = new Uint8Array(analyser.frequencyBinCount);
+          const tick = window.setInterval(() => {
+            analyser.getByteFrequencyData(data);
+            for (const v of data) if (v > peak) peak = v;
+          }, 80);
+          levelStop = () => {
+            window.clearInterval(tick);
+            void ctx.close().catch(() => {});
+          };
+        }
+      } catch {
+        /* medidor opcional */
+      }
+
       const mime = MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")
         ? "audio/ogg;codecs=opus"
         : MediaRecorder.isTypeSupported("audio/mp4")
@@ -1442,27 +1527,48 @@ function Inbox() {
             : "";
       const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
       const chunks: Blob[] = [];
+      const startedAt = Date.now();
       rec.ondataavailable = (e) => {
         if (e.data.size) chunks.push(e.data);
       };
       rec.onstop = () => {
+        levelStop();
         stopRecStream();
         if (recCancelRef.current) {
           recCancelRef.current = false;
           return;
         }
+        const elapsed = Date.now() - startedAt;
         const type = rec.mimeType || "audio/webm";
         const ext = type.includes("ogg") ? "ogg" : type.includes("mp4") ? "m4a" : "webm";
         const blob = new Blob(chunks, { type });
-        if (blob.size < 200) return;
+        if (elapsed < 700) {
+          setError(micErrorMessage(new Error("MIC_SHORT")));
+          return;
+        }
+        if (blob.size < 800) {
+          setError(micErrorMessage(new Error("MIC_SILENT")));
+          return;
+        }
+        // peak=0 se medidor falhou; só bloqueia quando medimos e ficou mudo
+        if (peak > 0 && peak < 10) {
+          setError(micErrorMessage(new Error("MIC_SILENT")));
+          return;
+        }
         const file = new File([blob], `audio-${Date.now()}.${ext}`, { type });
         void sendMediaFile(file);
       };
-      rec.start();
+      rec.onerror = () => {
+        levelStop();
+        stopRecStream();
+        setRecording(false);
+        setError("Falha ao gravar áudio. Autorize o microfone e tente de novo.");
+      };
+      rec.start(250);
       recRef.current = rec;
       setRecording(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Não foi possível gravar o áudio");
+      setError(micErrorMessage(e));
       stopRecStream();
       setRecording(false);
     }
