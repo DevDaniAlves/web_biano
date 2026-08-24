@@ -220,6 +220,11 @@
   color: var(--warn);
 }
 
+.badge-open {
+  background: color-mix(in srgb, #ff9800 22%, transparent);
+  color: #ff9800;
+}
+
 .badge-human {
   background: color-mix(in srgb, var(--wa-accent) 22%, transparent);
   color: var(--wa-accent);
@@ -847,6 +852,16 @@
 
 .wa-composer-wrap .wa-composer {
   border-top: 0;
+}
+
+.wa-open-queue-hint {
+  margin: 0.45rem 0.75rem 0;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #ff9800;
+  background: color-mix(in srgb, #ff9800 12%, transparent);
+  border-radius: 6px;
 }
 
 .wa-reply-bar {

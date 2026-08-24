@@ -27,6 +27,8 @@ export interface WaUser {
   active?: boolean;
   /** Vê todas as conversas (sem recorte) e pode assumir para histórico. */
   seeAllMessages?: boolean;
+  /** Aparece no menu do bot para o cliente escolher. */
+  showInAttendantList?: boolean;
 }
 
 export type ContactStatus = "bot" | "waiting" | "human" | "awaiting_rating" | "closed";
@@ -201,6 +203,11 @@ export const waApi = {
       method: "POST",
       body: JSON.stringify({ contactId, userId, queueId }),
     }),
+  openToAll: (contactId: string, queueId?: string) =>
+    request<WaContact>("/whatsapp/contacts/open-to-all", {
+      method: "POST",
+      body: JSON.stringify({ contactId, queueId }),
+    }),
   resolve: (contactId: string) =>
     request("/whatsapp/contacts/resolve", {
       method: "POST",
@@ -239,6 +246,7 @@ export const waApi = {
     password: string;
     role?: string;
     seeAllMessages?: boolean;
+    showInAttendantList?: boolean;
   }) =>
     request<WaUser>("/whatsapp/users", {
       method: "POST",
@@ -249,7 +257,15 @@ export const waApi = {
       method: "PATCH",
       body: JSON.stringify({ active }),
     }),
-  updateUser: (id: string, data: { name?: string; active?: boolean; seeAllMessages?: boolean }) =>
+  updateUser: (
+    id: string,
+    data: {
+      name?: string;
+      active?: boolean;
+      seeAllMessages?: boolean;
+      showInAttendantList?: boolean;
+    }
+  ) =>
     request<WaUser>(`/whatsapp/users/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),

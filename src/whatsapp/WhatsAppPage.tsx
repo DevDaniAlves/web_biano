@@ -374,13 +374,15 @@ function AudioBubble({ src }: { src: string }) {
   );
 }
 
-function badgeMeta(status: ContactStatus, webhookPaused?: boolean) {
+function badgeMeta(status: ContactStatus, webhookPaused?: boolean, openToAll?: boolean) {
   if (webhookPaused) {
     return { label: "Manual", className: "badge-manual" };
   }
   switch (status) {
     case "waiting":
-      return { label: "Pendente", className: "badge-pending" };
+      return openToAll
+        ? { label: "Aberta p/ todos", className: "badge-open" }
+        : { label: "Pendente", className: "badge-pending" };
     case "human":
       return { label: "Em atendimento", className: "badge-human" };
     case "awaiting_rating":
@@ -774,6 +776,7 @@ export function UsersTab() {
               <th>E-mail</th>
               <th>Perfil</th>
               <th>Ver todas</th>
+              <th>Lista atendentes</th>
               <th>Status</th>
               <th />
             </tr>
@@ -834,6 +837,29 @@ export function UsersTab() {
                   )}
                 </td>
                 <td>
+                  {u.role === "admin" ? (
+                    <span className="admin-pill">—</span>
+                  ) : u.seeAllMessages ? (
+                    <span className="admin-pill" title="Ver todas remove da lista do bot">
+                      Não (ver todas)
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() =>
+                        void waApi
+                          .updateUser(u.id, {
+                            showInAttendantList: u.showInAttendantList === false,
+                          })
+                          .then(() => load())
+                      }
+                    >
+                      {u.showInAttendantList === false ? "Não — ligar" : "Sim — desligar"}
+                    </button>
+                  )}
+                </td>
+                <td>
                   <span className={`admin-pill${u.active === false ? "" : " ok"}`}>
                     {u.active === false ? "Inativo" : "Ativo"}
                   </span>
@@ -881,7 +907,8 @@ export function UsersTab() {
           <h3 style={{ margin: "0 0 0.5rem" }}>Escala de {selected.name}</h3>
           <p className="lede" style={{ marginTop: 0 }}>
             Intervalos de atendimento (ex.: Seg 08:00–12:00 e 13:00–18:00). Sem escala cadastrada =
-            disponível (exceto folgas). Horário de Brasília.
+            disponível. Folga/férias só impedem nova conexão exclusiva do bot (o vendedor continua
+            ativo e pode atender). Horário de Brasília.
           </p>
           {schedError && <p className="admin-error">{schedError}</p>}
 
@@ -927,7 +954,7 @@ export function UsersTab() {
                 {slots.length === 0 ? (
                   <tr>
                     <td colSpan={4} style={{ color: "var(--muted)" }}>
-                      Nenhum intervalo — vendedor considerado disponível fora de folgas
+                      Nenhum intervalo — vendedor considerado disponível (folga só bloqueia conexão exclusiva)
                     </td>
                   </tr>
                 ) : (
@@ -954,7 +981,11 @@ export function UsersTab() {
             </table>
           </div>
 
-          <h3 style={{ margin: "1.5rem 0 0.5rem" }}>Folgas / férias / inatividade</h3>
+          <h3 style={{ margin: "1.5rem 0 0.5rem" }}>Folgas / férias</h3>
+          <p className="lede" style={{ marginTop: 0 }}>
+            Durante a folga o vendedor continua ativo. Só não recebe conexão exclusiva do bot; se o
+            cliente escolher esse nome, a conversa abre para a equipe.
+          </p>
           <form
             className="admin-toolbar"
             onSubmit={async (e) => {
@@ -1602,7 +1633,10 @@ function Inbox() {
     setBusy(true);
     setError("");
     try {
-      const contact = await waApi.assign(selectedId, assumeTarget);
+      const contact =
+        assumeTarget === "__open__"
+          ? await waApi.openToAll(selectedId)
+          : await waApi.assign(selectedId, assumeTarget);
       setSelectedFlags(contact);
       setAssumeOpen(false);
       await refreshContacts();
@@ -1725,7 +1759,7 @@ function Inbox() {
         {error && !selectedId && <p className="wa-error pad">{error}</p>}
         <ul>
           {contacts.map((c) => {
-            const b = badgeMeta(c.status, c.webhookPaused);
+            const b = badgeMeta(c.status, c.webhookPaused, c.openToAll);
             return (
               <li key={c.id}>
                 <button
@@ -1814,6 +1848,9 @@ function Inbox() {
                     ? ` · WhatsApp: ${selected.pushName}`
                     : ""}
                   {selected.assignedTo?.name ? ` · Com: ${selected.assignedTo.name}` : ""}
+                  {selected.openToAll && selected.status === "waiting"
+                    ? " · Aberta para todos"
+                    : ""}
                   {selected.rating != null ? ` · Nota ${selected.rating}` : ""}
                 </span>
               </div>
@@ -1830,6 +1867,7 @@ function Inbox() {
                         aria-label="Quem assume"
                         disabled={busy}
                       >
+                        <option value="__open__">Disponível para todos (primeiro responde)</option>
                         {user && (
                           <option value={user.id}>Eu — {user.name}</option>
                         )}
@@ -1987,6 +2025,11 @@ function Inbox() {
               </div>
             ) : (
               <div className="wa-composer-wrap">
+                {selected.openToAll && selected.status === "waiting" && (
+                  <p className="wa-open-queue-hint">
+                    Conversa aberta para a equipe — envie uma mensagem para assumir o atendimento.
+                  </p>
+                )}
                 {replyTo && (
                   <div className="wa-reply-bar">
                     <div className="wa-reply-bar-body">
