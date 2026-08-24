@@ -29,6 +29,10 @@ export interface WaUser {
   seeAllMessages?: boolean;
   /** Aparece no menu do bot para o cliente escolher. */
   showInAttendantList?: boolean;
+  /** Atende fluxo Atendimento (opção 1) */
+  flowAtendimento?: boolean;
+  /** Atende fluxo Financeiro (opção 2) */
+  flowFinanceiro?: boolean;
 }
 
 export type ContactStatus = "bot" | "waiting" | "human" | "awaiting_rating" | "closed";
@@ -265,6 +269,8 @@ export const waApi = {
       role?: "admin" | "seller";
       seeAllMessages?: boolean;
       showInAttendantList?: boolean;
+      flowAtendimento?: boolean;
+      flowFinanceiro?: boolean;
     }
   ) =>
     request<WaUser>(`/whatsapp/users/${id}`, {

@@ -795,6 +795,8 @@ export function UsersTab() {
               <th>Perfil</th>
               <th>Ver todas</th>
               <th>Lista atendentes</th>
+              <th>Atendimento</th>
+              <th>Financeiro</th>
               <th>Status</th>
               <th />
             </tr>
@@ -901,6 +903,44 @@ export function UsersTab() {
                       }
                     >
                       {u.showInAttendantList === false ? "Não — ligar" : "Sim — desligar"}
+                    </button>
+                  )}
+                </td>
+                <td>
+                  {u.role === "admin" ? (
+                    <span className="admin-pill">—</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() =>
+                        void waApi
+                          .updateUser(u.id, {
+                            flowAtendimento: u.flowAtendimento === false,
+                          })
+                          .then(() => load())
+                      }
+                    >
+                      {u.flowAtendimento === false ? "Não — ligar" : "Sim — desligar"}
+                    </button>
+                  )}
+                </td>
+                <td>
+                  {u.role === "admin" ? (
+                    <span className="admin-pill">—</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() =>
+                        void waApi
+                          .updateUser(u.id, {
+                            flowFinanceiro: !u.flowFinanceiro,
+                          })
+                          .then(() => load())
+                      }
+                    >
+                      {u.flowFinanceiro ? "Sim — desligar" : "Não — ligar"}
                     </button>
                   )}
                 </td>
