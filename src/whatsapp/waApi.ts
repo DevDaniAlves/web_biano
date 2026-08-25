@@ -100,6 +100,7 @@ export interface WaContact {
   unreadCount: number;
   openToAll?: boolean;
   offeredToId?: string | null;
+  botFlow?: "atendimento" | "financeiro" | null;
   rating?: number | null;
   webhookPaused?: boolean;
   canWarnInactivity?: boolean;

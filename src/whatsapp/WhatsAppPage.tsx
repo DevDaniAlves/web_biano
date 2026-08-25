@@ -1929,14 +1929,19 @@ function Inbox() {
                     ? ` · WhatsApp: ${selected.pushName}`
                     : ""}
                   {selected.assignedTo?.name ? ` · Com: ${selected.assignedTo.name}` : ""}
+                  {selected.botFlow === "financeiro"
+                    ? " · Financeiro"
+                    : selected.botFlow === "atendimento"
+                      ? " · Atendimento"
+                      : ""}
                   {selected.openToAll && selected.status === "waiting"
-                    ? " · Aberta para todos"
+                    ? " · Aberta para equipe"
                     : ""}
                   {selected.rating != null ? ` · Nota ${selected.rating}` : ""}
                 </span>
               </div>
               <div className="wa-actions">
-                {user?.role === "admin" &&
+                {seeAll &&
                   !selected.webhookPaused &&
                   flags?.status !== "closed" &&
                   flags?.status !== "awaiting_rating" &&
@@ -1945,10 +1950,14 @@ function Inbox() {
                       <select
                         value={assumeTarget}
                         onChange={(e) => setAssumeTarget(e.target.value)}
-                        aria-label="Quem assume"
+                        aria-label="Mover atendimento"
                         disabled={busy}
                       >
-                        <option value="__open__">Disponível para todos (primeiro responde)</option>
+                        <option value="__open__">
+                          {selected.botFlow === "financeiro"
+                            ? "Disponível p/ equipe financeira"
+                            : "Disponível p/ equipe (primeiro responde)"}
+                        </option>
                         {user && (
                           <option value={user.id}>Eu — {user.name}</option>
                         )}
@@ -1983,16 +1992,16 @@ function Inbox() {
                       onClick={() => {
                         setAssumeTarget(user?.id ?? "");
                         setAssumeOpen(true);
-                        if (user?.role === "admin" && sellers.length === 0) {
+                        if (sellers.length === 0) {
                           waApi.users().then(setSellers).catch(() => {});
                         }
                       }}
                     >
                       {flags?.status === "human" && selected.assignedTo?.id === user?.id
-                        ? "Reatribuir"
+                        ? "Mover / reatribuir"
                         : flags?.status === "human" && selected.assignedTo
-                          ? "Transferir / assumir"
-                          : "Assumir"}
+                          ? "Mover / transferir"
+                          : "Assumir / mover"}
                     </button>
                   ))}
                 {user?.role === "admin" && (
