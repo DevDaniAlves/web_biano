@@ -1483,28 +1483,42 @@ function Inbox() {
     return "document";
   }
 
-  async function sendMediaFile(file: File) {
-    if (!selectedId || readOnly || sendingRef.current) return;
+  async function sendMediaFile(file: File, opts?: { caption?: string; keepBusy?: boolean }) {
+    if (!selectedId || readOnly) return;
+    if (sendingRef.current && !opts?.keepBusy) return;
     sendingRef.current = true;
     setAttachOpen(false);
     setBusy(true);
     setError("");
     const kind = mediaKindOf(file);
-    const caption = kind === "audio" ? undefined : text.trim() || undefined;
-    const tempId = `tmp-media-${Date.now()}`;
+    const caption =
+      opts?.caption !== undefined
+        ? opts.caption || undefined
+        : kind === "audio"
+          ? undefined
+          : text.trim() || undefined;
+    const tempId = `tmp-media-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const localUrl = URL.createObjectURL(file);
     const optimistic: WaMessage = {
       id: tempId,
       contactId: selectedId,
       direction: "out",
       type: kind,
-      body: caption ?? (kind === "audio" ? "[áudio]" : kind === "video" ? "[vídeo]" : kind === "document" ? file.name : null),
+      body:
+        caption ??
+        (kind === "audio"
+          ? "[áudio]"
+          : kind === "video"
+            ? "[vídeo]"
+            : kind === "document"
+              ? file.name
+              : null),
       mediaUrl: localUrl,
       createdAt: new Date().toISOString(),
       sentBy: user ? { id: user.id, name: user.name } : null,
       delivery: "pending",
     };
-    setText("");
+    if (opts?.caption === undefined && kind !== "audio") setText("");
     stickToBottomRef.current = true;
     setNewBelowCount(0);
     setMessages((prev) => [...prev, optimistic]);
@@ -1527,9 +1541,36 @@ function Inbox() {
         prev.map((m) => (m.id === tempId ? { ...m, delivery: "failed" as const } : m))
       );
       setError(String((e as Error).message));
+      throw e;
+    } finally {
+      if (!opts?.keepBusy) {
+        sendingRef.current = false;
+        setBusy(false);
+      }
+    }
+  }
+
+  async function sendMediaFiles(files: File[]) {
+    if (!selectedId || readOnly || sendingRef.current || files.length === 0) return;
+    const list = [...files];
+    const caption = text.trim();
+    setText("");
+    sendingRef.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      for (let i = 0; i < list.length; i++) {
+        await sendMediaFile(list[i], {
+          caption: i === 0 ? caption : "",
+          keepBusy: true,
+        });
+      }
+    } catch {
+      // erro já exibido em sendMediaFile
     } finally {
       sendingRef.current = false;
       setBusy(false);
+      void refreshContacts();
     }
   }
 
@@ -2174,12 +2215,14 @@ function Inbox() {
                 <input
                   ref={galleryRef}
                   type="file"
+                  multiple
                   accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ogg,.webm,.mp4,.mp3,.m4a"
                   hidden
                   onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) void sendMediaFile(f);
+                    const files = e.target.files ? Array.from(e.target.files) : [];
                     e.target.value = "";
+                    if (files.length === 1) void sendMediaFile(files[0]);
+                    else if (files.length > 1) void sendMediaFiles(files);
                   }}
                 />
                 <textarea
