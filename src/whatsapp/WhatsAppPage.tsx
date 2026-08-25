@@ -1942,7 +1942,6 @@ function Inbox() {
               </div>
               <div className="wa-actions">
                 {seeAll &&
-                  !selected.webhookPaused &&
                   flags?.status !== "closed" &&
                   flags?.status !== "awaiting_rating" &&
                   (assumeOpen ? (
@@ -1962,10 +1961,11 @@ function Inbox() {
                           <option value={user.id}>Eu — {user.name}</option>
                         )}
                         {sellers
-                          .filter((s) => s.role === "seller" && s.active !== false && s.id !== user?.id)
+                          .filter((s) => s.active !== false && s.id !== user?.id)
                           .map((s) => (
                             <option key={s.id} value={s.id}>
                               {s.name}
+                              {s.role === "admin" ? " (admin)" : ""}
                             </option>
                           ))}
                       </select>
@@ -1997,11 +1997,7 @@ function Inbox() {
                         }
                       }}
                     >
-                      {flags?.status === "human" && selected.assignedTo?.id === user?.id
-                        ? "Mover / reatribuir"
-                        : flags?.status === "human" && selected.assignedTo
-                          ? "Mover / transferir"
-                          : "Assumir / mover"}
+                      Mover atendimento
                     </button>
                   ))}
                 {user?.role === "admin" && (
