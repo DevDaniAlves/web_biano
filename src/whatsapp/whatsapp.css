@@ -220,9 +220,21 @@
   color: var(--warn);
 }
 
+.badge-finance {
+  background: color-mix(in srgb, #5c6bc0 22%, transparent);
+  color: #5c6bc0;
+}
+
 .badge-open {
   background: color-mix(in srgb, #ff9800 22%, transparent);
   color: #ff9800;
+}
+
+.wa-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.15rem;
 }
 
 .badge-human {

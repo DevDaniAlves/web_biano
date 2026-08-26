@@ -374,23 +374,41 @@ function AudioBubble({ src }: { src: string }) {
   );
 }
 
-function badgeMeta(status: ContactStatus, webhookPaused?: boolean, openToAll?: boolean) {
+function badgeMeta(
+  status: ContactStatus,
+  webhookPaused?: boolean,
+  openToAll?: boolean,
+  botFlow?: "atendimento" | "financeiro" | null
+) {
   if (webhookPaused) {
-    return { label: "Manual", className: "badge-manual" };
+    return { labels: [{ label: "Manual", className: "badge-manual" }] };
   }
   switch (status) {
-    case "waiting":
-      return openToAll
-        ? { label: "Aberta p/ todos", className: "badge-open" }
-        : { label: "Pendente", className: "badge-pending" };
+    case "waiting": {
+      if (openToAll) {
+        const labels = [{ label: "Pendente", className: "badge-pending" }];
+        if (botFlow === "financeiro") {
+          labels.push({ label: "Financeiro", className: "badge-finance" });
+        }
+        return { labels };
+      }
+      return { labels: [{ label: "Pendente", className: "badge-pending" }] };
+    }
     case "human":
-      return { label: "Em atendimento", className: "badge-human" };
+      return {
+        labels: [
+          { label: "Em atendimento", className: "badge-human" },
+          ...(botFlow === "financeiro"
+            ? [{ label: "Financeiro", className: "badge-finance" }]
+            : []),
+        ],
+      };
     case "awaiting_rating":
-      return { label: "Aguardando avaliação", className: "badge-rating" };
+      return { labels: [{ label: "Aguardando avaliação", className: "badge-rating" }] };
     case "closed":
-      return { label: "Finalizado", className: "badge-closed" };
+      return { labels: [{ label: "Finalizado", className: "badge-closed" }] };
     default:
-      return { label: "Bot", className: "badge-bot" };
+      return { labels: [{ label: "Bot", className: "badge-bot" }] };
   }
 }
 
@@ -1881,7 +1899,7 @@ function Inbox() {
         {error && !selectedId && <p className="wa-error pad">{error}</p>}
         <ul>
           {contacts.map((c) => {
-            const b = badgeMeta(c.status, c.webhookPaused, c.openToAll);
+            const b = badgeMeta(c.status, c.webhookPaused, c.openToAll, c.botFlow);
             return (
               <li key={c.id}>
                 <button
@@ -1896,7 +1914,13 @@ function Inbox() {
                       <time>{formatTime(c.lastMessageAt)}</time>
                     </div>
                     <span className="wa-preview">{c.lastMessagePreview || "—"}</span>
-                    <em className={`wa-badge ${b.className}`}>{b.label}</em>
+                    <span className="wa-badges">
+                      {b.labels.map((x) => (
+                        <em key={x.label} className={`wa-badge ${x.className}`}>
+                          {x.label}
+                        </em>
+                      ))}
+                    </span>
                   </div>
                   {c.unreadCount > 0 && <b className="wa-unread">{c.unreadCount}</b>}
                 </button>
