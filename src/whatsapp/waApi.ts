@@ -5,6 +5,26 @@ function authHeaders(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+let handlingUnauthorized = false;
+
+function handleUnauthorized() {
+  if (handlingUnauthorized) return;
+  handlingUnauthorized = true;
+  try {
+    localStorage.removeItem("calangus-token");
+    localStorage.removeItem("calangus-user");
+  } catch {
+    /* ignore */
+  }
+  const path = typeof window !== "undefined" ? window.location.pathname : "";
+  if (path && path !== "/login") {
+    // Full reload corta intervalos/polling que disparam /auth/me em loop
+    window.location.replace(`${window.location.origin}/login`);
+  } else {
+    handlingUnauthorized = false;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     ...init,
@@ -15,6 +35,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    // Login/senha inválidos também retornam 401 — não tratar como sessão expirada
+    const isLoginAttempt = path.includes("/auth/login");
+    if (!isLoginAttempt) {
+      handleUnauthorized();
+      throw new Error("Sessão expirada — faça login novamente");
+    }
+    throw new Error((data as { error?: string }).error ?? "Não autorizado");
+  }
   if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
   return data as T;
 }

@@ -1286,7 +1286,9 @@ function Inbox() {
           setStatus("");
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        // 401 já limpa sessão e redireciona em waApi
+      });
   }, []);
 
   useEffect(() => {

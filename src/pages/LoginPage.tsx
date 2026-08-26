@@ -1,6 +1,13 @@
 import { FormEvent, useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { getStoredUser, getToken, homePathForSession, isStandaloneDisplay, setSession } from "../auth";
+import {
+  clearSession,
+  getStoredUser,
+  getToken,
+  homePathForSession,
+  isStandaloneDisplay,
+  setSession,
+} from "../auth";
 import { enablePushNotifications } from "../push";
 import { useTheme } from "../store/ThemeContext";
 import { waApi } from "../whatsapp/waApi";
@@ -129,10 +136,13 @@ export function RequireAuth({
   const token = getToken();
   const stored = getStoredUser();
   const [user, setUser] = useState(stored);
-  const [checking, setChecking] = useState(Boolean(token && role === "admin"));
+  const [checking, setChecking] = useState(Boolean(token));
 
   useEffect(() => {
-    if (!token) return;
+    if (!token) {
+      setChecking(false);
+      return;
+    }
     let cancelled = false;
     waApi
       .me()
@@ -143,6 +153,7 @@ export function RequireAuth({
       })
       .catch(() => {
         if (cancelled) return;
+        clearSession();
         setUser(null);
       })
       .finally(() => {
