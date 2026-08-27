@@ -537,7 +537,16 @@ function dedupeOutMessages(list: WaMessage[]): WaMessage[] {
     const dupIdx = out.findIndex((x) => {
       if (x.direction !== "out" || x.type !== m.type) return false;
       if (Math.abs(new Date(x.createdAt).getTime() - mt) > 8_000) return false;
-      if (m.type === "image" || m.type === "video") {
+      // Mensagens distintas no WhatsApp (ids diferentes) nunca são a mesma
+      if (x.externalId && m.externalId && x.externalId !== m.externalId) return false;
+      if (m.type === "image" || m.type === "video" || m.type === "document" || m.type === "audio") {
+        // Arquivos diferentes = envios diferentes (multi-foto)
+        const xu = x.mediaUrl || "";
+        const mu = m.mediaUrl || "";
+        if (xu && mu && xu !== mu && !xu.startsWith("blob:") && !mu.startsWith("blob:")) {
+          return false;
+        }
+        // tmp blob vs server: pode ser o mesmo envio se o corpo bate
         return (x.body ?? "") === (m.body ?? "") || (!x.body && !m.body);
       }
       return (x.body ?? "") === (m.body ?? "");
@@ -565,26 +574,63 @@ function dedupeOutMessages(list: WaMessage[]): WaMessage[] {
 }
 
 function mergeServerMessages(server: WaMessage[], prev: WaMessage[]): WaMessage[] {
-  const mapped = dedupeOutMessages(
-    server.map((m) => ({
+  const byId = new Map<string, WaMessage>();
+
+  for (const m of prev) {
+    byId.set(m.id, m);
+  }
+
+  for (const m of server) {
+    const prevMsg = byId.get(m.id);
+    byId.set(m.id, {
       ...m,
       delivery: (m.delivery ?? "sent") as "sent",
-    }))
-  );
-  const pending = prev.filter((m) => m.id.startsWith("tmp-") && m.delivery === "pending");
-  if (pending.length === 0) return sortThread(mapped);
-
-  const kept = pending.filter((p) => {
-    const pt = new Date(p.createdAt).getTime();
-    return !mapped.some((s) => {
-      if (s.direction !== "out" || s.type !== p.type) return false;
-      const close = Math.abs(new Date(s.createdAt).getTime() - pt) < 90_000;
-      if (!close) return false;
-      if (p.type === "image") return true;
-      return (s.body ?? "") === (p.body ?? "");
+      // Não perder mediaUrl local se o poll vier sem (eco webhook incompleto)
+      mediaUrl: m.mediaUrl || prevMsg?.mediaUrl || null,
+      sentBy: m.sentBy || prevMsg?.sentBy || null,
     });
+  }
+
+  const all = [...byId.values()];
+  const serverOut = all.filter((m) => !m.id.startsWith("tmp-") && m.direction === "out");
+  const matchedServer = new Set<string>();
+
+  const result = all.filter((m) => {
+    if (!(m.id.startsWith("tmp-") || m.id.startsWith("ck-")) || m.delivery !== "pending") {
+      return true;
+    }
+    const pt = new Date(m.createdAt).getTime();
+    const match = serverOut.find((s) => {
+      if (matchedServer.has(s.id)) return false;
+      if (m.clientKey && s.clientKey) return m.clientKey === s.clientKey;
+      if (m.clientKey && !s.clientKey && s.id === m.id) return true;
+      if (s.type !== m.type) return false;
+      if (Math.abs(new Date(s.createdAt).getTime() - pt) > 120_000) return false;
+      if (m.type === "image" || m.type === "video" || m.type === "audio" || m.type === "document") {
+        const pb = (m.body ?? "").trim();
+        const sb = (s.body ?? "").trim();
+        if (pb && sb && pb !== sb && !isMediaPlaceholder(pb) && !isMediaPlaceholder(sb)) {
+          return false;
+        }
+        return true;
+      }
+      return (s.body ?? "") === (m.body ?? "");
+    });
+    if (match) {
+      matchedServer.add(match.id);
+      if (m.mediaUrl?.startsWith("blob:")) {
+        try {
+          URL.revokeObjectURL(m.mediaUrl);
+        } catch {
+          /* ignore */
+        }
+      }
+      return false;
+    }
+    return true;
   });
-  return sortThread(dedupeOutMessages([...mapped, ...kept]));
+
+  return sortThread(dedupeOutMessages(result));
 }
 
 export default function WhatsAppPage({ embedded = false }: { embedded?: boolean }) {
@@ -1508,7 +1554,10 @@ function Inbox() {
     return "document";
   }
 
-  async function sendMediaFile(file: File, opts?: { caption?: string; keepBusy?: boolean }) {
+  async function sendMediaFile(
+    file: File,
+    opts?: { caption?: string; keepBusy?: boolean; clientKey?: string }
+  ) {
     if (!selectedId || readOnly) return;
     if (sendingRef.current && !opts?.keepBusy) return;
     sendingRef.current = true;
@@ -1522,7 +1571,9 @@ function Inbox() {
         : kind === "audio"
           ? undefined
           : text.trim() || undefined;
-    const tempId = `tmp-media-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const tempId =
+      opts?.clientKey ||
+      `ck-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     const localUrl = URL.createObjectURL(file);
     const optimistic: WaMessage = {
       id: tempId,
@@ -1539,6 +1590,7 @@ function Inbox() {
               ? file.name
               : null),
       mediaUrl: localUrl,
+      clientKey: tempId,
       createdAt: new Date().toISOString(),
       sentBy: user ? { id: user.id, name: user.name } : null,
       delivery: "pending",
@@ -1549,16 +1601,23 @@ function Inbox() {
     setMessages((prev) => [...prev, optimistic]);
     try {
       const toSend = kind === "image" ? await compressImage(file) : file;
-      const msg = await waApi.sendImage(selectedId, toSend, caption);
+      const msg = await waApi.sendImage(selectedId, toSend, caption, tempId);
       setMessages((prev) => {
-        const next = prev.filter((m) => {
-          if (m.id === tempId) {
-            if (m.mediaUrl?.startsWith("blob:")) URL.revokeObjectURL(m.mediaUrl);
-            return false;
+        const next = prev.filter(
+          (m) => m.id !== tempId && m.id !== msg.id && m.clientKey !== tempId
+        );
+        const mediaUrl = msg.mediaUrl || localUrl;
+        if (msg.mediaUrl && localUrl.startsWith("blob:")) {
+          try {
+            URL.revokeObjectURL(localUrl);
+          } catch {
+            /* ignore */
           }
-          return m.id !== msg.id;
-        });
-        return [...next, { ...msg, delivery: "sent" as const }];
+        }
+        return [
+          ...next,
+          { ...msg, mediaUrl, clientKey: msg.clientKey || tempId, delivery: "sent" as const },
+        ];
       });
       void refreshContacts();
     } catch (e) {
@@ -1577,26 +1636,96 @@ function Inbox() {
 
   async function sendMediaFiles(files: File[]) {
     if (!selectedId || readOnly || sendingRef.current || files.length === 0) return;
+    const contactId = selectedId;
     const list = [...files];
     const caption = text.trim();
     setText("");
     sendingRef.current = true;
     setBusy(true);
     setError("");
-    try {
-      for (let i = 0; i < list.length; i++) {
-        await sendMediaFile(list[i], {
-          caption: i === 0 ? caption : "",
-          keepBusy: true,
-        });
-      }
-    } catch {
-      // erro já exibido em sendMediaFile
-    } finally {
-      sendingRef.current = false;
-      setBusy(false);
-      void refreshContacts();
-    }
+    setAttachOpen(false);
+    stickToBottomRef.current = true;
+    setNewBelowCount(0);
+
+    const baseTs = Date.now();
+    const batch = list.map((file, i) => {
+      const kind = mediaKindOf(file);
+      const clientKey = `ck-${baseTs}-${i}-${Math.random().toString(36).slice(2, 9)}`;
+      const localUrl = URL.createObjectURL(file);
+      const cap = i === 0 ? caption || undefined : undefined;
+      const optimistic: WaMessage = {
+        id: clientKey,
+        contactId,
+        direction: "out",
+        type: kind,
+        body:
+          cap ??
+          (kind === "audio"
+            ? "[áudio]"
+            : kind === "video"
+              ? "[vídeo]"
+              : kind === "document"
+                ? file.name
+                : null),
+        mediaUrl: localUrl,
+        clientKey,
+        createdAt: new Date(baseTs + i).toISOString(),
+        sentBy: user ? { id: user.id, name: user.name } : null,
+        delivery: "pending",
+      };
+      return { file, kind, clientKey, localUrl, caption: cap, optimistic };
+    });
+
+    setMessages((prev) => [...prev, ...batch.map((b) => b.optimistic)]);
+
+    // 1 request por imagem, em paralelo — cada uma com clientKey única
+    await Promise.all(
+      batch.map(async (b) => {
+        try {
+          const toSend = b.kind === "image" ? await compressImage(b.file) : b.file;
+          const msg = await waApi.sendImage(contactId, toSend, b.caption, b.clientKey);
+          setMessages((prev) => {
+            const next = prev.filter(
+              (m) =>
+                m.id !== b.clientKey &&
+                m.clientKey !== b.clientKey &&
+                m.id !== msg.id
+            );
+            const mediaUrl = msg.mediaUrl || b.localUrl;
+            if (msg.mediaUrl && b.localUrl.startsWith("blob:")) {
+              try {
+                URL.revokeObjectURL(b.localUrl);
+              } catch {
+                /* ignore */
+              }
+            }
+            return [
+              ...next,
+              {
+                ...msg,
+                mediaUrl,
+                clientKey: msg.clientKey || b.clientKey,
+                delivery: "sent" as const,
+              },
+            ];
+          });
+        } catch (e) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === b.clientKey || m.clientKey === b.clientKey
+                ? { ...m, delivery: "failed" as const }
+                : m
+            )
+          );
+          setError(String((e as Error).message));
+        }
+      })
+    );
+
+    sendingRef.current = false;
+    setBusy(false);
+    void refreshContacts();
+    if (selectedId) void refreshMessages(selectedId, true);
   }
 
   function stopRecStream() {

@@ -161,6 +161,8 @@ export interface WaMessage {
   } | null;
   createdAt: string;
   sentBy?: { id: string; name: string } | null;
+  /** Key do envio no cliente (multi-foto). */
+  clientKey?: string | null;
   /** UI: pending = relógio, sent = ✓✓ */
   delivery?: "pending" | "sent" | "failed";
 }
@@ -218,19 +220,62 @@ export const waApi = {
         ...(quotedMessageId ? { quotedMessageId } : {}),
       }),
     }),
-  sendImage: async (contactId: string, file: File, caption?: string) => {
+  sendImage: async (contactId: string, file: File, caption?: string, clientKey?: string) => {
     const form = new FormData();
     form.append("contactId", contactId);
     form.append("file", file);
     if (caption) form.append("caption", caption);
+    if (clientKey) form.append("clientKey", clientKey);
     const res = await fetch(`${API}/whatsapp/messages/image`, {
       method: "POST",
       headers: authHeaders(),
       body: form,
     });
     const data = await res.json();
+    if (res.status === 401) {
+      handleUnauthorized();
+      throw new Error("Sessão expirada — faça login novamente");
+    }
     if (!res.ok) throw new Error(data.error ?? res.statusText);
     return data as WaMessage;
+  },
+  /** @deprecated prefer N× sendImage com clientKey (1 request por imagem). */
+  sendImages: async (
+    contactId: string,
+    files: File[],
+    opts?: { caption?: string; clientKeys?: string[] }
+  ) => {
+    const form = new FormData();
+    form.append("contactId", contactId);
+    if (opts?.caption) form.append("caption", opts.caption);
+    if (opts?.clientKeys?.length) {
+      form.append("clientKeys", JSON.stringify(opts.clientKeys));
+    }
+    for (const f of files) form.append("files", f);
+    const res = await fetch(`${API}/whatsapp/messages/images`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) {
+      handleUnauthorized();
+      throw new Error("Sessão expirada — faça login novamente");
+    }
+    if (!res.ok && !(data as { results?: unknown[] }).results) {
+      throw new Error((data as { error?: string }).error ?? res.statusText);
+    }
+    return data as {
+      results: Array<{
+        ok: boolean;
+        index: number;
+        clientKey?: string;
+        message?: WaMessage;
+        error?: string;
+      }>;
+      messages: WaMessage[];
+      errors: Array<{ index: number; clientKey?: string; error?: string }>;
+    };
   },
   assign: (contactId: string, userId?: string, queueId?: string) =>
     request<WaContact>("/whatsapp/contacts/assign", {
