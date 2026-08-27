@@ -78,7 +78,34 @@ export function ConnectPage() {
   const [tplName, setTplName] = useState("boleto_lembrete");
   const [tplLang, setTplLang] = useState("pt_BR");
   const [tplBody, setTplBody] = useState("");
+  const [tplCategory, setTplCategory] = useState<"UTILITY" | "MARKETING">("UTILITY");
+  const [tplExamples, setTplExamples] = useState<string[]>([
+    "Maria",
+    "129,90",
+    "20/08/2026",
+    "https://calangusmoda.crediario.digital/login",
+  ]);
+  const [tplHeaderFormat, setTplHeaderFormat] = useState<"IMAGE" | null>(null);
+  const [tplHeaderSampleUrl, setTplHeaderSampleUrl] = useState("");
+  const [tplHeaderFile, setTplHeaderFile] = useState<File | null>(null);
   const [tplMsg, setTplMsg] = useState("");
+  const [tplPresets, setTplPresets] = useState<{
+    boleto?: {
+      name: string;
+      language: string;
+      category: string;
+      bodyText: string;
+      bodyExamples: string[];
+    };
+    produto?: {
+      name: string;
+      language: string;
+      category: string;
+      bodyText: string;
+      bodyExamples: string[];
+      note?: string;
+    };
+  }>({});
   const [metaPhoneId, setMetaPhoneId] = useState("");
   const [metaWabaId, setMetaWabaId] = useState("");
   const [profileMsg, setProfileMsg] = useState("");
@@ -252,54 +279,55 @@ export function ConnectPage() {
     try {
       const r = await waApi.metaTemplates();
       setTemplates(r.templates);
+      setTplPresets({ boleto: r.defaultBoleto, produto: r.defaultProduto });
       if (!tplBody && r.defaultBoleto?.bodyText) {
         setTplBody(r.defaultBoleto.bodyText);
         setTplName(r.defaultBoleto.name || "boleto_lembrete");
         setTplLang(r.defaultBoleto.language || "pt_BR");
+        setTplCategory("UTILITY");
+        setTplExamples(r.defaultBoleto.bodyExamples || []);
+        setTplHeaderFormat(null);
       }
     } catch (e) {
       setTplMsg(String((e as Error).message));
     }
   }
 
-  async function loadHook() {
-    try {
-      const API = import.meta.env.VITE_API_URL ?? "/api";
-      const res = await fetch(`${API}/webhook/status`);
-      setHookStatus(await res.json());
-    } catch {
-      /* ignore */
-    }
+  function applyPreset(kind: "boleto" | "produto") {
+    const p = kind === "boleto" ? tplPresets.boleto : tplPresets.produto;
+    if (!p) return;
+    setTplName(p.name);
+    setTplLang(p.language || "pt_BR");
+    setTplBody(p.bodyText);
+    setTplCategory(p.category === "MARKETING" ? "MARKETING" : "UTILITY");
+    setTplExamples(p.bodyExamples || []);
+    setTplHeaderFormat(kind === "produto" ? "IMAGE" : null);
+    setTplHeaderFile(null);
+    setTplMsg(
+      kind === "produto"
+        ? "Modelo produto carregado. Faça upload da foto de exemplo e clique em Criar."
+        : "Modelo boleto carregado."
+    );
   }
-
-  useEffect(() => {
-    load().catch((e) => setError(String(e.message)));
-    loadMeta().catch(() => {});
-    loadGupshup().catch(() => {});
-    loadTemplates().catch(() => {});
-    loadMetaProfile().catch(() => {});
-    loadHook().catch(() => {});
-    const t = setInterval(() => {
-      load().catch(() => {});
-      loadMeta().catch(() => {});
-      loadGupshup().catch(() => {});
-      loadHook().catch(() => {});
-    }, 5000);
-    return () => clearInterval(t);
-  }, []);
 
   async function saveTemplate(replaceExisting: boolean) {
     setTplBusy(true);
     setTplMsg("");
     setError("");
     try {
+      if (tplHeaderFormat === "IMAGE" && !tplHeaderFile && !tplHeaderSampleUrl.trim()) {
+        throw new Error("Template com foto: envie uma imagem ou URL HTTPS de exemplo");
+      }
       await waApi.createMetaTemplate({
         name: tplName,
         language: tplLang,
-        category: "UTILITY",
+        category: tplCategory,
         bodyText: tplBody,
-        bodyExamples: ["Maria", "129,90", "20/08/2026", "https://calangusmoda.crediario.digital/login"],
+        bodyExamples: tplExamples,
         replaceExisting,
+        headerFormat: tplHeaderFormat,
+        headerSampleUrl: tplHeaderSampleUrl.trim() || undefined,
+        headerFile: tplHeaderFile,
       });
       setTplMsg(
         replaceExisting
@@ -328,6 +356,32 @@ export function ConnectPage() {
       setTplBusy(false);
     }
   }
+
+  async function loadHook() {
+    try {
+      const API = import.meta.env.VITE_API_URL ?? "/api";
+      const res = await fetch(`${API}/webhook/status`);
+      setHookStatus(await res.json());
+    } catch {
+      /* ignore */
+    }
+  }
+
+  useEffect(() => {
+    load().catch((e) => setError(String(e.message)));
+    loadMeta().catch(() => {});
+    loadGupshup().catch(() => {});
+    loadTemplates().catch(() => {});
+    loadMetaProfile().catch(() => {});
+    loadHook().catch(() => {});
+    const t = setInterval(() => {
+      load().catch(() => {});
+      loadMeta().catch(() => {});
+      loadGupshup().catch(() => {});
+      loadHook().catch(() => {});
+    }, 5000);
+    return () => clearInterval(t);
+  }, []);
 
   async function connect(byCode = false) {
     setBusy(true);
@@ -611,16 +665,27 @@ export function ConnectPage() {
         só sobem se o POST chegar aqui.
       </p>
 
-      <h2 style={{ marginTop: "1.5rem" }}>Templates Meta (boleto)</h2>
+      <h2 style={{ marginTop: "1.5rem" }}>Templates Meta</h2>
       <p className="lede">
-        Criar/recriar templates Utility na WABA (ex.: <code>boleto_lembrete</code>). Variáveis
-        posicionais: <code>{"{{1}}"}</code> nome, <code>{"{{2}}"}</code> valor,{" "}
-        <code>{"{{3}}"}</code> vencimento, <code>{"{{4}}"}</code> link. Texto precisa ser longo o
-        bastante (Meta rejeita muitas variáveis em frase curta). Template aprovado não edita
-        in-place — “Recriar” apaga e envia de novo.
+        Boleto (Utility): <code>{"{{1}}"}</code> nome, <code>{"{{2}}"}</code> valor,{" "}
+        <code>{"{{3}}"}</code> vencimento, <code>{"{{4}}"}</code> link. Produto disponível
+        (Marketing): <code>{"{{1}}"}</code> nome do cliente, <code>{"{{2}}"}</code> nome do
+        produto + <strong>foto no HEADER</strong>. Template aprovado não edita in-place —
+        “Recriar” apaga e envia de novo.
       </p>
       {tplMsg && <p className="admin-hint-ok">{tplMsg}</p>}
       <div className="admin-toolbar" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
+        <button type="button" className="ghost" disabled={tplBusy} onClick={() => applyPreset("boleto")}>
+          Modelo boleto
+        </button>
+        <button type="button" className="ghost" disabled={tplBusy} onClick={() => applyPreset("produto")}>
+          Modelo produto + foto
+        </button>
+        <button type="button" className="ghost" disabled={tplBusy} onClick={() => void loadTemplates()}>
+          Atualizar lista
+        </button>
+      </div>
+      <div className="admin-toolbar" style={{ flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
         <input
           value={tplName}
           onChange={(e) => setTplName(e.target.value)}
@@ -633,17 +698,46 @@ export function ConnectPage() {
           placeholder="pt_BR"
           style={{ maxWidth: "6rem" }}
         />
-        <button type="button" className="ghost" disabled={tplBusy} onClick={() => void loadTemplates()}>
-          Atualizar lista
-        </button>
+        <select
+          value={tplCategory}
+          onChange={(e) => setTplCategory(e.target.value === "MARKETING" ? "MARKETING" : "UTILITY")}
+          style={{ maxWidth: "10rem" }}
+        >
+          <option value="UTILITY">UTILITY</option>
+          <option value="MARKETING">MARKETING</option>
+        </select>
       </div>
       <textarea
         value={tplBody}
         onChange={(e) => setTplBody(e.target.value)}
         rows={8}
         style={{ width: "100%", marginTop: "0.5rem", fontFamily: "inherit" }}
-        placeholder="Corpo do template com {{1}} {{2}} {{3}} {{4}}"
+        placeholder="Corpo do template com {{1}} {{2}}..."
       />
+      {tplHeaderFormat === "IMAGE" && (
+        <div style={{ marginTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+          <label style={{ fontSize: "0.85rem" }}>
+            Foto de exemplo (upload)
+            <input
+              type="file"
+              accept="image/*"
+              style={{ display: "block", marginTop: "0.25rem" }}
+              onChange={(e) => setTplHeaderFile(e.target.files?.[0] ?? null)}
+            />
+          </label>
+          {tplHeaderFile && (
+            <span className="admin-hint-ok" style={{ fontSize: "0.8rem" }}>
+              Arquivo: {tplHeaderFile.name}
+            </span>
+          )}
+          <input
+            value={tplHeaderSampleUrl}
+            onChange={(e) => setTplHeaderSampleUrl(e.target.value)}
+            placeholder="Ou URL HTTPS da foto de exemplo"
+            style={{ width: "100%" }}
+          />
+        </div>
+      )}
       <div className="admin-toolbar" style={{ marginTop: "0.5rem" }}>
         <button
           type="button"

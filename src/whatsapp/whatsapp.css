@@ -71,12 +71,102 @@
 
 .wa-list-head {
   padding: 0.85rem 1rem 0.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
 .wa-list-head h2 {
   margin: 0;
   font-size: 1.05rem;
   font-weight: 600;
+}
+
+.wa-outreach-btn {
+  flex-shrink: 0;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid var(--wa-border);
+  background: var(--wa-accent, #128c7e);
+  color: #fff;
+  cursor: pointer;
+}
+
+.wa-outreach-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.wa-outreach-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.wa-outreach-modal {
+  width: min(420px, 100%);
+  background: var(--wa-panel, #fff);
+  color: inherit;
+  border-radius: 12px;
+  padding: 1.1rem 1.15rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.wa-outreach-modal h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.wa-outreach-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.85;
+  line-height: 1.35;
+}
+
+.wa-outreach-modal label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.wa-outreach-modal input,
+.wa-outreach-modal select {
+  font-weight: 400;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--wa-border);
+  background: var(--wa-composer, #f0f2f5);
+  color: inherit;
+}
+
+.wa-outreach-preview {
+  max-height: 180px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  align-self: center;
+}
+
+.wa-outreach-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
 }
 
 .wa-list-tools {

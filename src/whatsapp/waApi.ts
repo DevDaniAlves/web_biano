@@ -510,20 +510,86 @@ export const waApi = {
         category: string;
         bodyText: string;
         bodyExamples: string[];
+        headerFormat?: string | null;
+      };
+      defaultProduto?: {
+        name: string;
+        language: string;
+        category: string;
+        bodyText: string;
+        bodyExamples: string[];
+        headerFormat?: string | null;
+        note?: string;
       };
     }>("/whatsapp/meta/templates"),
-  createMetaTemplate: (data: {
+  createMetaTemplate: async (data: {
     name: string;
     language?: string;
     category?: string;
     bodyText: string;
     bodyExamples?: string[];
     replaceExisting?: boolean;
-  }) =>
-    request<{ ok: boolean; data?: unknown; error?: string }>("/whatsapp/meta/templates", {
+    headerFormat?: "IMAGE" | null;
+    headerSampleUrl?: string;
+    headerHandle?: string;
+    headerFile?: File | null;
+  }) => {
+    if (data.headerFile) {
+      const form = new FormData();
+      form.append("name", data.name);
+      form.append("bodyText", data.bodyText);
+      if (data.language) form.append("language", data.language);
+      if (data.category) form.append("category", data.category);
+      if (data.replaceExisting) form.append("replaceExisting", "true");
+      if (data.headerFormat) form.append("headerFormat", data.headerFormat);
+      if (data.bodyExamples?.length) form.append("bodyExamples", JSON.stringify(data.bodyExamples));
+      form.append("file", data.headerFile);
+      const res = await fetch(`${API}/whatsapp/meta/templates`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: form,
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        handleUnauthorized();
+        throw new Error("Sessão expirada — faça login novamente");
+      }
+      if (!res.ok) throw new Error((body as { error?: string }).error ?? res.statusText);
+      return body as { ok: boolean; data?: unknown };
+    }
+    return request<{ ok: boolean; data?: unknown; error?: string }>("/whatsapp/meta/templates", {
       method: "POST",
-      body: JSON.stringify(data),
-    }),
+      body: JSON.stringify({
+        name: data.name,
+        language: data.language,
+        category: data.category,
+        bodyText: data.bodyText,
+        bodyExamples: data.bodyExamples,
+        replaceExisting: data.replaceExisting,
+        headerFormat: data.headerFormat,
+        headerSampleUrl: data.headerSampleUrl,
+        headerHandle: data.headerHandle,
+      }),
+    });
+  },
+  sendProductOutreach: async (contactId: string, productName: string, file: File) => {
+    const form = new FormData();
+    form.append("contactId", contactId);
+    form.append("productName", productName);
+    form.append("file", file);
+    const res = await fetch(`${API}/whatsapp/messages/product-outreach`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) {
+      handleUnauthorized();
+      throw new Error("Sessão expirada — faça login novamente");
+    }
+    if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
+    return data as WaMessage;
+  },
   deleteMetaTemplate: (name: string) =>
     request<{ ok: boolean }>("/whatsapp/meta/templates/" + encodeURIComponent(name), {
       method: "DELETE",

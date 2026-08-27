@@ -1206,6 +1206,11 @@ function Inbox() {
   const [saveContactDraft, setSaveContactDraft] = useState("");
   const [assumeOpen, setAssumeOpen] = useState(false);
   const [assumeTarget, setAssumeTarget] = useState("");
+  const [outreachOpen, setOutreachOpen] = useState(false);
+  const [outreachContactId, setOutreachContactId] = useState("");
+  const [outreachProduct, setOutreachProduct] = useState("");
+  const [outreachFile, setOutreachFile] = useState<File | null>(null);
+  const [outreachPreview, setOutreachPreview] = useState<string | null>(null);
   const [newBelowCount, setNewBelowCount] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -1841,13 +1846,61 @@ function Inbox() {
     }
   }
 
+  function openOutreach() {
+    setError("");
+    setOutreachProduct("");
+    setOutreachFile(null);
+    if (outreachPreview) URL.revokeObjectURL(outreachPreview);
+    setOutreachPreview(null);
+    setOutreachContactId(selectedId || contacts[0]?.id || "");
+    setOutreachOpen(true);
+  }
+
+  async function submitOutreach(e: FormEvent) {
+    e.preventDefault();
+    if (!outreachContactId || !outreachProduct.trim() || !outreachFile) {
+      setError("Selecione o cliente, informe o produto e envie a foto");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await waApi.sendProductOutreach(outreachContactId, outreachProduct.trim(), outreachFile);
+      setOutreachOpen(false);
+      setOutreachProduct("");
+      setOutreachFile(null);
+      if (outreachPreview) URL.revokeObjectURL(outreachPreview);
+      setOutreachPreview(null);
+      await openContact(outreachContactId);
+      await refreshContacts();
+    } catch (err) {
+      setError(String((err as Error).message));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const flags = selectedFlags ?? selected;
+
+  const outreachOptions = useMemo(() => {
+    const map = new Map(contacts.map((c) => [c.id, c]));
+    if (selected && !map.has(selected.id)) map.set(selected.id, selected);
+    return [...map.values()];
+  }, [contacts, selected]);
 
   return (
     <div className={`wa-inbox${selectedId ? " has-chat" : ""}`}>
       <aside className="wa-list">
         <div className="wa-list-head">
           <h2>Conversas</h2>
+          <button
+            type="button"
+            className="wa-outreach-btn"
+            disabled={busy || (contacts.length === 0 && !selectedId)}
+            onClick={() => openOutreach()}
+          >
+            Entrar em contato
+          </button>
         </div>
         <div className="wa-list-tools">
           <input
@@ -1898,7 +1951,7 @@ function Inbox() {
             ))}
           </div>
         </div>
-        {error && !selectedId && <p className="wa-error pad">{error}</p>}
+        {error && !selectedId && !outreachOpen && <p className="wa-error pad">{error}</p>}
         <ul>
           {contacts.map((c) => {
             const b = badgeMeta(c.status, c.webhookPaused, c.openToAll, c.botFlow);
@@ -2315,6 +2368,78 @@ function Inbox() {
           </>
         )}
       </section>
+
+      {outreachOpen && (
+        <div
+          className="wa-outreach-overlay"
+          role="dialog"
+          aria-label="Entrar em contato"
+          onClick={() => !busy && setOutreachOpen(false)}
+        >
+          <form
+            className="wa-outreach-modal"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={(e) => void submitOutreach(e)}
+          >
+            <h3>Entrar em contato</h3>
+            <p className="wa-outreach-hint">
+              Envia o template com a foto do produto e o nome. O cliente precisa ter o template{" "}
+              <code>produto_disponivel</code> aprovado na Meta.
+            </p>
+            {error && <p className="wa-error">{error}</p>}
+            <label>
+              Cliente
+              <select
+                value={outreachContactId}
+                onChange={(e) => setOutreachContactId(e.target.value)}
+                required
+              >
+                <option value="">Selecione…</option>
+                {outreachOptions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name || c.phone} · {c.phone}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Nome do produto
+              <input
+                value={outreachProduct}
+                onChange={(e) => setOutreachProduct(e.target.value)}
+                placeholder="Ex.: Vestido Floral M"
+                required
+                maxLength={60}
+              />
+            </label>
+            <label>
+              Foto do produto
+              <input
+                type="file"
+                accept="image/*"
+                required={!outreachFile}
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  if (outreachPreview) URL.revokeObjectURL(outreachPreview);
+                  setOutreachFile(f);
+                  setOutreachPreview(f ? URL.createObjectURL(f) : null);
+                }}
+              />
+            </label>
+            {outreachPreview && (
+              <img src={outreachPreview} alt="Prévia" className="wa-outreach-preview" />
+            )}
+            <div className="wa-outreach-actions">
+              <button type="button" className="ghost" disabled={busy} onClick={() => setOutreachOpen(false)}>
+                Cancelar
+              </button>
+              <button type="submit" disabled={busy || !outreachContactId || !outreachProduct.trim() || !outreachFile}>
+                {busy ? "Enviando…" : "Enviar"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
