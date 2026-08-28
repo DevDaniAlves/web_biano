@@ -1,4 +1,11 @@
 import { useEffect, useState } from "react";
+import {
+  CatalogPhotoPicker,
+  CatalogProductPhotos,
+  pendingPhotosToFiles,
+  revokePendingPhotos,
+  type PendingPhoto,
+} from "./CatalogPhotoPicker";
 import { waApi } from "../whatsapp/waApi";
 
 export { ReportsPage } from "./ReportsPage";
@@ -1020,7 +1027,7 @@ export function CatalogAdminPage() {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [description, setDescription] = useState("");
-  const [newPhotos, setNewPhotos] = useState<File[]>([]);
+  const [newPhotos, setNewPhotos] = useState<PendingPhoto[]>([]);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1049,8 +1056,9 @@ export function CatalogAdminPage() {
         description: description || undefined,
       });
       if (newPhotos.length) {
-        await waApi.uploadProductImages(product.id, newPhotos);
+        await waApi.uploadProductImages(product.id, pendingPhotosToFiles(newPhotos));
       }
+      revokePendingPhotos(newPhotos);
       setName("");
       setPrice("");
       setDescription("");
@@ -1077,15 +1085,15 @@ export function CatalogAdminPage() {
     }
   }
 
-  async function addPhotos(productId: string, files: FileList | null) {
-    if (!files?.length) return;
+  async function uploadOnePhoto(productId: string, file: File) {
     setUploadingId(productId);
     setError("");
     try {
-      await waApi.uploadProductImages(productId, Array.from(files));
+      await waApi.uploadProductImages(productId, [file]);
       await load();
     } catch (err) {
       setError(String((err as Error).message));
+      throw err;
     } finally {
       setUploadingId(null);
     }
@@ -1114,31 +1122,24 @@ export function CatalogAdminPage() {
       </div>
 
       <form className="admin-toolbar catalog-create-form" onSubmit={(e) => void create(e)}>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome" required />
-        <input
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-          placeholder="Preço"
-          required
-        />
-        <input
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Descrição"
-        />
-        <label className="catalog-file-input">
-          <span>Fotos (opcional)</span>
+        <div className="catalog-create-fields">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome" required />
           <input
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={(e) => setNewPhotos(Array.from(e.target.files ?? []))}
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="Preço"
+            required
           />
-          {newPhotos.length > 0 && <em>{newPhotos.length} arquivo(s)</em>}
-        </label>
-        <button type="submit" disabled={busy}>
-          {busy ? "Salvando…" : "Adicionar item"}
-        </button>
+          <input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Descrição"
+          />
+          <button type="submit" disabled={busy}>
+            {busy ? "Salvando…" : "Adicionar item"}
+          </button>
+        </div>
+        <CatalogPhotoPicker photos={newPhotos} onChange={setNewPhotos} disabled={busy} />
       </form>
 
       <div className="admin-table-wrap">
@@ -1156,35 +1157,21 @@ export function CatalogAdminPage() {
             {products.map((p) => (
               <tr key={p.id}>
                 <td className="catalog-photos-cell">
-                  <div className="catalog-photo-grid">
-                    {(p.productImages ?? []).map((img) => (
-                      <div key={img.id} className="catalog-photo-thumb">
-                        <img src={catalogMediaSrc(img.imageUrl)} alt="" />
-                        <button
-                          type="button"
-                          className="catalog-photo-del"
-                          title="Remover foto"
-                          onClick={() =>
-                            void waApi.deleteProductImage(p.id, img.id).then(load).catch((err) =>
-                              setError(String(err.message))
-                            )
-                          }
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <label className="catalog-add-photos">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      disabled={uploadingId === p.id}
-                      onChange={(e) => void addPhotos(p.id, e.target.files)}
-                    />
-                    {uploadingId === p.id ? "Enviando…" : "+ Fotos"}
-                  </label>
+                  <CatalogProductPhotos
+                    productId={p.id}
+                    images={p.productImages ?? []}
+                    mediaSrc={catalogMediaSrc}
+                    uploading={uploadingId === p.id}
+                    onUpload={uploadOnePhoto}
+                    onDelete={async (productId, imageId) => {
+                      await waApi.deleteProductImage(productId, imageId);
+                      await load();
+                    }}
+                    onReorder={async (productId, imageIds) => {
+                      await waApi.reorderProductImages(productId, imageIds);
+                      await load();
+                    }}
+                  />
                 </td>
                 <td>
                   <strong>{p.name}</strong>

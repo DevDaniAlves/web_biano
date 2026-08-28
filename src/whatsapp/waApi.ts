@@ -727,6 +727,11 @@ export const waApi = {
     request<CatalogProduct>(`/catalog/admin/products/${productId}/images/${imageId}`, {
       method: "DELETE",
     }),
+  reorderProductImages: (productId: string, imageIds: string[]) =>
+    request<CatalogProduct>(`/catalog/admin/products/${productId}/images/order`, {
+      method: "PUT",
+      body: JSON.stringify({ imageIds }),
+    }),
   updateProduct: (id: string, data: Partial<CatalogProduct>) =>
     request<CatalogProduct>(`/catalog/admin/products/${id}`, {
       method: "PUT",
