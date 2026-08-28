@@ -422,10 +422,14 @@ function badgeMeta(
   webhookPaused?: boolean,
   openToAll?: boolean,
   botFlow?: "atendimento" | "financeiro" | null,
-  isBoletoReminder?: boolean
+  isBoletoReminder?: boolean,
+  sellerInactive?: boolean
 ) {
   if (isBoletoReminder) {
     return { labels: [{ label: "LEMBRETE_BOLETO", className: "badge-boleto" }] };
+  }
+  if (sellerInactive && status === "human") {
+    return { labels: [{ label: "AGUARDANDO VC", className: "badge-seller-idle" }] };
   }
   if (webhookPaused) {
     return { labels: [{ label: "Manual", className: "badge-manual" }] };
@@ -2281,7 +2285,14 @@ function Inbox() {
         {error && !selectedId && !outreachOpen && <p className="wa-error pad">{error}</p>}
         <ul>
           {contacts.map((c) => {
-            const b = badgeMeta(c.status, c.webhookPaused, c.openToAll, c.botFlow, c.isBoletoReminder);
+            const b = badgeMeta(
+              c.status,
+              c.webhookPaused,
+              c.openToAll,
+              c.botFlow,
+              c.isBoletoReminder,
+              c.sellerInactive
+            );
             return (
               <li key={c.id}>
                 <button
@@ -2386,6 +2397,11 @@ function Inbox() {
                     : ""}
                   {selected.rating != null ? ` · Nota ${selected.rating}` : ""}
                 </span>
+                {flags?.sellerInactive && (
+                  <p className="wa-seller-idle-hint">
+                    Cliente aguardando há {flags.sellerInactiveMinutes ?? 0}+ min — responda no chat
+                  </p>
+                )}
               </div>
               <div className="wa-actions">
                 {seeAll &&

@@ -137,6 +137,9 @@ export interface WaContact {
   canWarnInactivity?: boolean;
   canResolveInactivity?: boolean;
   inactiveMinutes?: number;
+  waitingOn?: "client" | "seller" | null;
+  sellerInactive?: boolean;
+  sellerInactiveMinutes?: number;
   /** Disparo Gestor — lembrete de boleto enviado, aguardando resposta. */
   isBoletoReminder?: boolean;
   assignedTo?: { id: string; name: string } | null;
