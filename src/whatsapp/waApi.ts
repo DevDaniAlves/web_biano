@@ -268,6 +268,33 @@ export const waApi = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+  pixKey: () =>
+    request<{
+      key: string | null;
+      keyType: string;
+      merchantName: string | null;
+      message: string | null;
+    }>("/whatsapp/pix-key"),
+  updatePixKey: (data: {
+    key?: string | null;
+    keyType?: string | null;
+    merchantName?: string | null;
+    message?: string | null;
+  }) =>
+    request<{
+      key: string | null;
+      keyType: string;
+      merchantName: string | null;
+      message: string | null;
+    }>("/whatsapp/pix-key", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  sendPix: (contactId: string) =>
+    request<WaMessage>("/whatsapp/messages/pix", {
+      method: "POST",
+      body: JSON.stringify({ contactId }),
+    }),
   sendImage: async (contactId: string, file: File, caption?: string, clientKey?: string) => {
     const form = new FormData();
     form.append("contactId", contactId);

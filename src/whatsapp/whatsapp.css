@@ -1370,6 +1370,68 @@
   margin: 0;
 }
 
+.wa-pix-card {
+  min-width: 220px;
+  max-width: 300px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel, rgba(255, 255, 255, 0.04));
+}
+
+.wa-pix-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.75rem 0.55rem;
+}
+
+.wa-pix-icon {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 999px;
+  background: #d9f7e8;
+  color: #00a884;
+  flex-shrink: 0;
+}
+
+.wa-pix-meta {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.wa-pix-meta strong {
+  font-size: 0.95rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wa-pix-meta span {
+  font-size: 0.78rem;
+  color: var(--muted, #667781);
+}
+
+.wa-pix-copy {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: #00a884;
+  font-weight: 700;
+  font-size: 0.82rem;
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+}
+
+.wa-pix-copy:hover {
+  background: var(--row-hover);
+}
+
 .wa-camera-overlay {
   position: fixed;
   inset: 0;

@@ -139,6 +139,10 @@ export function ConnectPage() {
   const [storeLocName, setStoreLocName] = useState("");
   const [storeLocAddress, setStoreLocAddress] = useState("");
   const [storeLocMessage, setStoreLocMessage] = useState("");
+  const [pixKey, setPixKey] = useState("");
+  const [pixKeyType, setPixKeyType] = useState("CNPJ");
+  const [pixMerchantName, setPixMerchantName] = useState("");
+  const [pixMessage, setPixMessage] = useState("");
 
   async function loadStoreLocation() {
     const row = await waApi.storeLocation();
@@ -161,6 +165,32 @@ export function ConnectPage() {
         message: storeLocMessage,
       });
       await loadStoreLocation();
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setMetaBusy(false);
+    }
+  }
+
+  async function loadPixKey() {
+    const row = await waApi.pixKey();
+    setPixKey(row.key ?? "");
+    setPixKeyType(row.keyType ?? "CNPJ");
+    setPixMerchantName(row.merchantName ?? "");
+    setPixMessage(row.message ?? "");
+  }
+
+  async function savePixKey() {
+    setMetaBusy(true);
+    setError("");
+    try {
+      await waApi.updatePixKey({
+        key: pixKey.trim() || null,
+        keyType: pixKeyType,
+        merchantName: pixMerchantName,
+        message: pixMessage,
+      });
+      await loadPixKey();
     } catch (e) {
       setError(String((e as Error).message));
     } finally {
@@ -410,6 +440,7 @@ export function ConnectPage() {
   useEffect(() => {
     load().catch((e) => setError(String(e.message)));
     loadStoreLocation().catch(() => {});
+    loadPixKey().catch(() => {});
     loadMeta().catch(() => {});
     loadGupshup().catch(() => {});
     loadTemplates().catch(() => {});
@@ -550,6 +581,49 @@ export function ConnectPage() {
       <div className="admin-toolbar">
         <button type="button" disabled={metaBusy} onClick={() => void saveStoreLocation()}>
           Salvar localização
+        </button>
+      </div>
+
+      <h2>Chave Pix</h2>
+      <p className="lede">
+        Cadastro usado no atendimento WhatsApp (+ → Pix). Envia o cartão nativo com botão
+        &quot;Copiar chave Pix&quot; (CNPJ, CPF, celular, e-mail ou chave aleatória).
+      </p>
+      <div className="admin-toolbar" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
+        <input
+          value={pixKey}
+          onChange={(e) => setPixKey(e.target.value)}
+          placeholder="Chave Pix (ex: 11184995000104)"
+          style={{ minWidth: "14rem", flex: 2 }}
+        />
+        <select
+          value={pixKeyType}
+          onChange={(e) => setPixKeyType(e.target.value)}
+          style={{ maxWidth: "9rem" }}
+        >
+          <option value="CNPJ">CNPJ</option>
+          <option value="CPF">CPF</option>
+          <option value="PHONE">Celular</option>
+          <option value="EMAIL">E-mail</option>
+          <option value="EVP">Aleatória</option>
+        </select>
+        <input
+          value={pixMerchantName}
+          onChange={(e) => setPixMerchantName(e.target.value)}
+          placeholder="Nome exibido (ex: Calangus Moda Jovem)"
+          style={{ minWidth: "14rem", flex: 2 }}
+        />
+      </div>
+      <textarea
+        value={pixMessage}
+        onChange={(e) => setPixMessage(e.target.value)}
+        placeholder="Mensagem acima do cartão (ex: Segue nossa chave Pix para pagamento 👇)"
+        rows={2}
+        style={{ width: "100%", marginBottom: "0.65rem" }}
+      />
+      <div className="admin-toolbar">
+        <button type="button" disabled={metaBusy} onClick={() => void savePixKey()}>
+          Salvar chave Pix
         </button>
       </div>
 

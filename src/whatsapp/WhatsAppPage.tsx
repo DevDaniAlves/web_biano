@@ -55,7 +55,17 @@ function quoteKindLabel(type: string, body: string | null) {
   if (type === "audio") return "Áudio";
   if (type === "document") return "Documento";
   if (type === "location") return "Localização";
+  if (type === "pix") return "Chave Pix";
   return body || "Mensagem";
+}
+
+function parsePixBubble(m: WaMessage): { merchantName: string; keyLabel: string; rawKey: string } | null {
+  if (m.type !== "pix") return null;
+  const lines = (m.body || "").split("\n").filter(Boolean);
+  const merchantName = lines[0] || "Pix";
+  const keyLabel = lines[1] || "Pix";
+  const rawKey = m.mediaUrl || keyLabel.replace(/^[^:]+:\s*/, "");
+  return { merchantName, keyLabel, rawKey };
 }
 
 function scrollToQuoted(messageId: string | null, externalId?: string | null) {
@@ -128,6 +138,7 @@ function ChatBubble(props: {
   const showQuote = Boolean(quoted);
   const hideBody = isMediaPlaceholder(m.body);
   const locCoords = m.type === "location" ? parseLocationCoords(m.mediaUrl) : null;
+  const pixInfo = m.type === "pix" ? parsePixBubble(m) : null;
   const locMapsUrl = locCoords ? mapsUrlForCoords(locCoords.lat, locCoords.lng) : null;
   const quoteThumb =
     quotedSrc &&
@@ -297,7 +308,34 @@ function ChatBubble(props: {
               <span className="wa-location-link">{locMapsUrl ? "Abrir no mapa" : "Localização"}</span>
             </a>
           )}
-          {m.body && !hideBody && m.type !== "document" && m.type !== "location" && (
+          {pixInfo && (
+            <div className="wa-pix-card">
+              <div className="wa-pix-head">
+                <span className="wa-pix-icon" aria-hidden>
+                  <svg viewBox="0 0 24 24" width="22" height="22">
+                    <path
+                      fill="currentColor"
+                      d="M6 4h4v4H6V4zm8 0h4v4h-4V4zM6 12h4v4H6v-4zm8 0h4v4h-4v-4z"
+                    />
+                  </svg>
+                </span>
+                <div className="wa-pix-meta">
+                  <strong>{pixInfo.merchantName}</strong>
+                  <span>{pixInfo.keyLabel}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="wa-pix-copy"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(pixInfo.rawKey).catch(() => {});
+                }}
+              >
+                Copiar chave Pix
+              </button>
+            </div>
+          )}
+          {m.body && !hideBody && m.type !== "document" && m.type !== "location" && m.type !== "pix" && (
             <p>
               <RichText text={m.body} />
             </p>
@@ -1393,6 +1431,12 @@ function Inbox() {
     address: string | null;
     message: string | null;
   } | null>(null);
+  const [pixConfig, setPixConfig] = useState<{
+    key: string | null;
+    keyType: string;
+    merchantName: string | null;
+    message: string | null;
+  } | null>(null);
   const [newBelowCount, setNewBelowCount] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -1480,6 +1524,7 @@ function Inbox() {
 
   useEffect(() => {
     waApi.storeLocation().then(setStoreLocation).catch(() => {});
+    waApi.pixKey().then(setPixConfig).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -1748,6 +1793,26 @@ function Inbox() {
         address: storeLocation.address,
         preamble: storeLocation.message,
       });
+      await refreshMessages(selectedId, user?.role === "admin");
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendPixKey() {
+    if (!selectedId || readOnly) return;
+    if (!pixConfig?.key) {
+      setError("Chave Pix não configurada. Peça ao administrador em Conectar WhatsApp.");
+      setAttachOpen(false);
+      return;
+    }
+    setAttachOpen(false);
+    setBusy(true);
+    setError("");
+    try {
+      await waApi.sendPix(selectedId);
       await refreshMessages(selectedId, user?.role === "admin");
     } catch (e) {
       setError(String((e as Error).message));
@@ -2640,6 +2705,13 @@ function Inbox() {
                       </button>
                       <button type="button" onClick={() => void sendMyLocation()}>
                         Minha localização
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!pixConfig?.key}
+                        onClick={() => void sendPixKey()}
+                      >
+                        Pix
                       </button>
                     </div>
                   )}
