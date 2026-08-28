@@ -994,25 +994,44 @@ export function ConnectPage() {
   );
 }
 
+function catalogMediaSrc(url: string) {
+  if (!url) return "";
+  if (/^https?:\/\//i.test(url) || url.startsWith("blob:")) return url;
+  const base = import.meta.env.VITE_API_URL ?? "";
+  const path = url.startsWith("/") ? url : `/${url}`;
+  if (base && !base.startsWith("/")) return `${base.replace(/\/$/, "")}${path}`;
+  return path;
+}
+
+type CatalogProductRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  imageUrl: string | null;
+  images?: string[];
+  productImages?: Array<{ id: string; imageUrl: string; sortOrder: number }>;
+  active: boolean;
+};
+
 export function CatalogAdminPage() {
-  const [products, setProducts] = useState<
-    {
-      id: string;
-      name: string;
-      description: string | null;
-      price: number;
-      imageUrl: string | null;
-      active: boolean;
-    }[]
-  >([]);
+  const [products, setProducts] = useState<CatalogProductRow[]>([]);
+  const [underConstruction, setUnderConstruction] = useState(false);
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [description, setDescription] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
+  const [newPhotos, setNewPhotos] = useState<File[]>([]);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   async function load() {
-    setProducts(await waApi.adminProducts());
+    const [list, settings] = await Promise.all([
+      waApi.adminProducts(),
+      waApi.adminCatalogSettings(),
+    ]);
+    setProducts(list);
+    setUnderConstruction(settings.underConstruction);
   }
 
   useEffect(() => {
@@ -1022,20 +1041,53 @@ export function CatalogAdminPage() {
   async function create(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setBusy(true);
     try {
-      await waApi.createProduct({
+      const product = await waApi.createProduct({
         name,
         price: Number(price),
         description: description || undefined,
-        imageUrl: imageUrl || undefined,
       });
+      if (newPhotos.length) {
+        await waApi.uploadProductImages(product.id, newPhotos);
+      }
       setName("");
       setPrice("");
       setDescription("");
-      setImageUrl("");
+      setNewPhotos([]);
       await load();
     } catch (err) {
       setError(String((err as Error).message));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleConstruction() {
+    setBusy(true);
+    setError("");
+    try {
+      const next = !underConstruction;
+      await waApi.updateCatalogSettings({ underConstruction: next });
+      setUnderConstruction(next);
+    } catch (err) {
+      setError(String((err as Error).message));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addPhotos(productId: string, files: FileList | null) {
+    if (!files?.length) return;
+    setUploadingId(productId);
+    setError("");
+    try {
+      await waApi.uploadProductImages(productId, Array.from(files));
+      await load();
+    } catch (err) {
+      setError(String((err as Error).message));
+    } finally {
+      setUploadingId(null);
     }
   }
 
@@ -1045,7 +1097,23 @@ export function CatalogAdminPage() {
         <h1>Catálogo</h1>
       </div>
       {error && <p className="admin-error">{error}</p>}
-      <form className="admin-toolbar" onSubmit={(e) => void create(e)}>
+
+      <div className="catalog-settings-bar">
+        <label className="inline-check catalog-construction-toggle">
+          <input
+            type="checkbox"
+            checked={underConstruction}
+            disabled={busy}
+            onChange={() => void toggleConstruction()}
+          />
+          <span>
+            <strong>Loja em construção</strong>
+            <small>O visitante vê só a página “Em construção” — produtos ficam ocultos.</small>
+          </span>
+        </label>
+      </div>
+
+      <form className="admin-toolbar catalog-create-form" onSubmit={(e) => void create(e)}>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome" required />
         <input
           value={price}
@@ -1058,18 +1126,26 @@ export function CatalogAdminPage() {
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Descrição"
         />
-        <input
-          value={imageUrl}
-          onChange={(e) => setImageUrl(e.target.value)}
-          placeholder="URL da imagem"
-        />
-        <button type="submit">Adicionar</button>
+        <label className="catalog-file-input">
+          <span>Fotos (opcional)</span>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(e) => setNewPhotos(Array.from(e.target.files ?? []))}
+          />
+          {newPhotos.length > 0 && <em>{newPhotos.length} arquivo(s)</em>}
+        </label>
+        <button type="submit" disabled={busy}>
+          {busy ? "Salvando…" : "Adicionar item"}
+        </button>
       </form>
+
       <div className="admin-table-wrap">
-        <table className="admin-table">
+        <table className="admin-table catalog-products-table">
           <thead>
             <tr>
-              <th />
+              <th>Fotos</th>
               <th>Nome</th>
               <th>Preço</th>
               <th>Status</th>
@@ -1079,24 +1155,44 @@ export function CatalogAdminPage() {
           <tbody>
             {products.map((p) => (
               <tr key={p.id}>
-                <td>
-                  {p.imageUrl ? (
-                    <img className="admin-thumb" src={p.imageUrl} alt="" />
-                  ) : (
-                    <div className="admin-thumb" />
-                  )}
+                <td className="catalog-photos-cell">
+                  <div className="catalog-photo-grid">
+                    {(p.productImages ?? []).map((img) => (
+                      <div key={img.id} className="catalog-photo-thumb">
+                        <img src={catalogMediaSrc(img.imageUrl)} alt="" />
+                        <button
+                          type="button"
+                          className="catalog-photo-del"
+                          title="Remover foto"
+                          onClick={() =>
+                            void waApi.deleteProductImage(p.id, img.id).then(load).catch((err) =>
+                              setError(String(err.message))
+                            )
+                          }
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <label className="catalog-add-photos">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      disabled={uploadingId === p.id}
+                      onChange={(e) => void addPhotos(p.id, e.target.files)}
+                    />
+                    {uploadingId === p.id ? "Enviando…" : "+ Fotos"}
+                  </label>
                 </td>
                 <td>
                   <strong>{p.name}</strong>
                   {p.description && (
-                    <div style={{ color: "var(--muted)", fontSize: "0.78rem" }}>
-                      {p.description}
-                    </div>
+                    <div style={{ color: "var(--muted)", fontSize: "0.78rem" }}>{p.description}</div>
                   )}
                 </td>
-                <td>
-                  {p.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                </td>
+                <td>{p.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
                 <td>
                   <span className={`admin-pill${p.active ? " ok" : " warn"}`}>
                     {p.active ? "Ativo" : "Inativo"}

@@ -1,13 +1,24 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Link, Navigate, Route, Routes } from "react-router-dom";
 import AdminLayout from "./admin/AdminLayout";
 import { CatalogAdminPage, ConnectPage, GalleryAdminPage, ReportsPage } from "./admin/AdminPages";
 import GestorApp from "./gestor/GestorApp";
-import LoginPage, { RequireAuth } from "./pages/LoginPage";
+import LoginPage, { RequireAuth, RequireCatalogManage } from "./pages/LoginPage";
 import MetaEmbeddedCallback from "./pages/MetaEmbeddedCallback";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import PwaStart from "./pages/PwaStart";
 import { Store } from "./pages/Store";
 import WhatsAppPage, { QueuesTab, UsersTab } from "./whatsapp/WhatsAppPage";
+
+function AtendimentoCatalogShell() {
+  return (
+    <div className="wa-catalog-shell">
+      <header className="wa-catalog-top">
+        <Link to="/atendimento">← Voltar ao atendimento</Link>
+      </header>
+      <CatalogAdminPage />
+    </div>
+  );
+}
 
 export default function App() {
   return (
@@ -24,6 +35,14 @@ export default function App() {
           <RequireAuth>
             <WhatsAppPage />
           </RequireAuth>
+        }
+      />
+      <Route
+        path="/atendimento/catalogo"
+        element={
+          <RequireCatalogManage>
+            <AtendimentoCatalogShell />
+          </RequireCatalogManage>
         }
       />
       <Route

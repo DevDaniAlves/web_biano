@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState, type FormEvent, type TouchEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { clearSession, getStoredUser, getToken, setSession } from "../auth";
+import { canManageCatalog, clearSession, getStoredUser, getToken, setSession } from "../auth";
 import ChangePasswordDialog from "../components/ChangePasswordDialog";
 import PushPermissionBanner from "../components/PushPermissionBanner";
 import { disablePushNotifications, showForegroundNotification, syncAppBadgeFromServer, bindPushResumeRefresh, enablePushNotifications } from "../push";
@@ -637,6 +637,30 @@ function mergeServerMessages(server: WaMessage[], prev: WaMessage[]): WaMessage[
   return sortThread(dedupeOutMessages(result));
 }
 
+function WaHamburgerIcon({ open }: { open: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+      {open ? (
+        <path
+          d="M6 6l12 12M18 6L6 18"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      ) : (
+        <path
+          d="M4 7h16M4 12h16M4 17h16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      )}
+    </svg>
+  );
+}
+
 export default function WhatsAppPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -644,6 +668,11 @@ export default function WhatsAppPage({ embedded = false }: { embedded?: boolean 
   const user = getStoredUser();
   const { theme, toggle } = useTheme();
   const [pwdOpen, setPwdOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [location.pathname]);
 
   if (!token || !user) {
     return <Navigate to="/login" replace />;
@@ -660,27 +689,58 @@ export default function WhatsAppPage({ embedded = false }: { embedded?: boolean 
     });
   }
 
+  const showCatalogManage = canManageCatalog(user);
+
   return (
-    <div className={`wa-shell${embedded ? " embedded" : ""}`}>
+    <div className={`wa-shell${embedded ? " embedded" : ""}${drawerOpen ? " wa-drawer-open" : ""}`}>
       {!embedded && (
-        <header className="wa-top">
-          <div>
-            <strong>Atendimento</strong>
-            <span>{user.name}</span>
-          </div>
-          <nav>
-            <button type="button" className="theme-toggle" onClick={toggle}>
+        <>
+          <header className="wa-top">
+            <button
+              type="button"
+              className="wa-menu-btn"
+              aria-label={drawerOpen ? "Fechar menu" : "Abrir menu"}
+              aria-expanded={drawerOpen}
+              onClick={() => setDrawerOpen((v) => !v)}
+            >
+              <WaHamburgerIcon open={drawerOpen} />
+            </button>
+            <div className="wa-top-title">
+              <strong>Atendimento</strong>
+              <span>{user.name}</span>
+            </div>
+            <button type="button" className="theme-toggle wa-top-theme" onClick={toggle}>
               {theme === "dark" ? "Claro" : "Escuro"}
             </button>
-            <Link to="/">Catálogo</Link>
-            <button type="button" onClick={() => setPwdOpen(true)}>
-              Alterar senha
-            </button>
-            <button type="button" onClick={logout}>
-              Sair
-            </button>
-          </nav>
-        </header>
+          </header>
+          <button
+            type="button"
+            className="wa-drawer-backdrop"
+            aria-label="Fechar menu"
+            onClick={() => setDrawerOpen(false)}
+          />
+          <aside className="wa-drawer">
+            <nav>
+              <Link to="/atendimento" onClick={() => setDrawerOpen(false)}>
+                Conversas
+              </Link>
+              <Link to="/" onClick={() => setDrawerOpen(false)}>
+                Ver catálogo (loja)
+              </Link>
+              {showCatalogManage && (
+                <Link to="/atendimento/catalogo" onClick={() => setDrawerOpen(false)}>
+                  Gerenciar catálogo
+                </Link>
+              )}
+              <button type="button" onClick={() => { setDrawerOpen(false); setPwdOpen(true); }}>
+                Alterar senha
+              </button>
+              <button type="button" onClick={logout}>
+                Sair
+              </button>
+            </nav>
+          </aside>
+        </>
       )}
       {!embedded && <PushPermissionBanner active />}
       <Inbox />
@@ -865,6 +925,7 @@ export function UsersTab() {
               <th>Lista atendentes</th>
               <th>Atendimento</th>
               <th>Financeiro</th>
+              <th>Catálogo</th>
               <th>Status</th>
               <th />
             </tr>
@@ -1005,6 +1066,23 @@ export function UsersTab() {
                       }
                     >
                       {u.flowFinanceiro ? "Sim — desligar" : "Não — ligar"}
+                    </button>
+                  )}
+                </td>
+                <td>
+                  {u.role === "admin" ? (
+                    <span className="admin-pill ok">Sim (admin)</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() =>
+                        void waApi
+                          .updateUser(u.id, { canManageCatalog: !u.canManageCatalog })
+                          .then(() => load())
+                      }
+                    >
+                      {u.canManageCatalog ? "Sim — desligar" : "Não — ligar"}
                     </button>
                   )}
                 </td>

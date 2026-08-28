@@ -39,6 +39,105 @@
   align-items: center;
 }
 
+.wa-menu-btn {
+  display: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 0.35rem;
+  cursor: pointer;
+}
+
+.wa-top-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.wa-top-theme {
+  flex-shrink: 0;
+}
+
+.wa-drawer-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  border: none;
+  background: rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+.wa-drawer {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(280px, 86vw);
+  z-index: 50;
+  background: var(--wa-header);
+  border-right: 1px solid var(--wa-border);
+  padding: 4.5rem 0.85rem 1rem;
+  transform: translateX(-105%);
+  transition: transform 0.2s ease;
+}
+
+.wa-drawer nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.wa-drawer a,
+.wa-drawer button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.65rem 0.75rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.wa-drawer a:hover,
+.wa-drawer button:hover {
+  background: var(--wa-row-hover, rgba(255, 255, 255, 0.06));
+}
+
+.wa-shell.wa-drawer-open .wa-drawer {
+  transform: translateX(0);
+}
+
+.wa-catalog-shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg, #0f0f0f);
+}
+
+.wa-catalog-top {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+}
+
+.wa-catalog-top a {
+  color: inherit;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.wa-catalog-shell .admin-panel {
+  flex: 1;
+  max-width: none;
+}
+
 .wa-top a,
 .wa-top > nav > button:not(.theme-toggle) {
   color: var(--white);
@@ -1396,6 +1495,26 @@
   .wa-actions button {
     font-size: 0.68rem;
     padding: 0.3rem 0.45rem;
+  }
+
+  .wa-menu-btn {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .wa-drawer-backdrop {
+    display: block;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .wa-shell.wa-drawer-open .wa-drawer-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .wa-drawer {
+    display: block;
   }
 }
 

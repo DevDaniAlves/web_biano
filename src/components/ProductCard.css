@@ -113,3 +113,53 @@
 .product-seller:hover {
   filter: brightness(1.08);
 }
+
+.product-gallery-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.product-gallery-nav.prev {
+  left: 0.4rem;
+}
+
+.product-gallery-nav.next {
+  right: 0.4rem;
+}
+
+.product-gallery-dots {
+  position: absolute;
+  bottom: 0.45rem;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 0.25rem;
+  z-index: 2;
+}
+
+.product-gallery-dots button {
+  width: 6px;
+  height: 6px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.45);
+  padding: 0;
+  cursor: pointer;
+}
+
+.product-gallery-dots button.on {
+  background: #fff;
+  width: 8px;
+}

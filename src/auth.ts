@@ -26,6 +26,10 @@ export function clearSession() {
   localStorage.removeItem(USER_KEY);
 }
 
+export function canManageCatalog(user: WaUser | null | undefined) {
+  return Boolean(user && (user.role === "admin" || user.canManageCatalog));
+}
+
 export function authHeaders(): HeadersInit {
   const token = getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};

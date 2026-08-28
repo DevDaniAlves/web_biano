@@ -50,16 +50,27 @@ export function Store() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [underConstruction, setUnderConstruction] = useState(false);
+
   const [galleryOpen, setGalleryOpen] = useState<string | null>(null);
 
   useEffect(() => {
-    waApi.catalogConfig().then((c) => {
-      setMode(c.mode);
-      setWaPhone(c.phone);
-      if (c.keyword) setKeyword(c.keyword);
-    }).catch(() => {});
-    waApi.catalogProducts().then(setProducts).catch(() => {});
-    waApi.catalogGallery().then(setGallery).catch(() => {});
+    waApi
+      .catalogConfig()
+      .then((c) => {
+        setMode(c.mode);
+        setWaPhone(c.phone);
+        if (c.keyword) setKeyword(c.keyword);
+        setUnderConstruction(Boolean(c.underConstruction));
+        if (c.underConstruction) {
+          setProducts([]);
+          setGallery([]);
+          return;
+        }
+        waApi.catalogProducts().then(setProducts).catch(() => {});
+        waApi.catalogGallery().then(setGallery).catch(() => {});
+      })
+      .catch(() => {});
   }, []);
 
   const generalWa =
@@ -84,6 +95,24 @@ export function Store() {
 
   if (isStandaloneDisplay()) {
     return <Navigate to={homePathForSession()} replace />;
+  }
+
+  if (underConstruction) {
+    return (
+      <div className="store store-construction">
+        <Header minimal />
+        <main className="construction-page">
+          <img className="construction-logo" src="/brand/logo-wordmark.png" alt="Calangus Moda Jovem" />
+          <h1>Em construção</h1>
+          <p>Estamos preparando novidades no catálogo. Volte em breve!</p>
+          {generalWa && (
+            <a className="hero-cta" href={generalWa} target="_blank" rel="noreferrer">
+              Falar no WhatsApp
+            </a>
+          )}
+        </main>
+      </div>
+    );
   }
 
   return (
@@ -124,6 +153,7 @@ export function Store() {
             <div key={p.id} style={{ animationDelay: `${0.04 * i}s` }}>
               <ProductCard
                 product={p}
+                mediaSrc={storeMediaSrc}
                 sellerHref={
                   waPhone && mode === "wa_me"
                     ? waMeLink(waPhone, sellerMessage(keyword, p.name))

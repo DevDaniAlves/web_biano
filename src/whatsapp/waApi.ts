@@ -62,6 +62,8 @@ export interface WaUser {
   flowAtendimento?: boolean;
   /** Atende fluxo Financeiro (opção 2) */
   flowFinanceiro?: boolean;
+  /** CRUD catálogo (produtos/fotos) */
+  canManageCatalog?: boolean;
 }
 
 export type ContactStatus = "bot" | "waiting" | "human" | "awaiting_rating" | "closed";
@@ -180,6 +182,8 @@ export interface CatalogProduct {
   description: string | null;
   price: number;
   imageUrl: string | null;
+  images?: string[];
+  productImages?: Array<{ id: string; imageUrl: string; sortOrder: number }>;
   active: boolean;
   sortOrder: number;
 }
@@ -348,6 +352,7 @@ export const waApi = {
       showInAttendantList?: boolean;
       flowAtendimento?: boolean;
       flowFinanceiro?: boolean;
+      canManageCatalog?: boolean;
     }
   ) =>
     request<WaUser>(`/whatsapp/users/${id}`, {
@@ -677,9 +682,13 @@ export const waApi = {
     }>(`/whatsapp/usage${qs ? `?${qs}` : ""}`);
   },
   catalogConfig: () =>
-    request<{ mode: "wa_me" | "form"; waLink: string | null; keyword: string; phone: string | null }>(
-      "/catalog/config"
-    ),
+    request<{
+      mode: "wa_me" | "form";
+      waLink: string | null;
+      keyword: string;
+      phone: string | null;
+      underConstruction: boolean;
+    }>("/catalog/config"),
   catalogProducts: () => request<CatalogProduct[]>("/catalog/products"),
   catalogGallery: () =>
     request<Array<{ id: string; imageUrl: string; caption: string | null }>>("/catalog/gallery"),
@@ -689,6 +698,13 @@ export const waApi = {
       body: JSON.stringify(data),
     }),
   adminProducts: () => request<CatalogProduct[]>("/catalog/admin/products"),
+  adminCatalogSettings: () =>
+    request<{ underConstruction: boolean }>("/catalog/admin/settings"),
+  updateCatalogSettings: (data: { underConstruction: boolean }) =>
+    request<{ underConstruction: boolean }>("/catalog/admin/settings", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
   createProduct: (data: {
     name: string;
     price: number;
@@ -698,6 +714,18 @@ export const waApi = {
     request<CatalogProduct>("/catalog/admin/products", {
       method: "POST",
       body: JSON.stringify(data),
+    }),
+  uploadProductImages: (productId: string, files: File[]) => {
+    const fd = new FormData();
+    for (const f of files) fd.append("files", f);
+    return request<CatalogProduct>(`/catalog/admin/products/${productId}/images`, {
+      method: "POST",
+      body: fd,
+    });
+  },
+  deleteProductImage: (productId: string, imageId: string) =>
+    request<CatalogProduct>(`/catalog/admin/products/${productId}/images/${imageId}`, {
+      method: "DELETE",
     }),
   updateProduct: (id: string, data: Partial<CatalogProduct>) =>
     request<CatalogProduct>(`/catalog/admin/products/${id}`, {

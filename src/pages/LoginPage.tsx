@@ -172,3 +172,44 @@ export function RequireAuth({
   }
   return <>{children}</>;
 }
+
+export function RequireCatalogManage({ children }: { children: ReactNode }) {
+  const token = getToken();
+  const stored = getStoredUser();
+  const [user, setUser] = useState(stored);
+  const [checking, setChecking] = useState(Boolean(token));
+
+  useEffect(() => {
+    if (!token) {
+      setChecking(false);
+      return;
+    }
+    let cancelled = false;
+    waApi
+      .me()
+      .then(({ user: u }) => {
+        if (cancelled) return;
+        setSession(token, u);
+        setUser(u);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        clearSession();
+        setUser(null);
+      })
+      .finally(() => {
+        if (!cancelled) setChecking(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  if (!token || (!user && !checking)) return <Navigate to="/login" replace />;
+  if (checking) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== "admin" && !user.canManageCatalog) {
+    return <Navigate to="/atendimento" replace />;
+  }
+  return <>{children}</>;
+}
