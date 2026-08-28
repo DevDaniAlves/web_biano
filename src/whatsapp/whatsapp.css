@@ -352,6 +352,12 @@
   color: #ffb74d;
 }
 
+.badge-boleto {
+  background: color-mix(in srgb, #ef6c00 20%, transparent);
+  color: #ef6c00;
+  letter-spacing: 0.02em;
+}
+
 .wa-unread {
   background: var(--wa-accent);
   color: #111;

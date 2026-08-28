@@ -378,8 +378,12 @@ function badgeMeta(
   status: ContactStatus,
   webhookPaused?: boolean,
   openToAll?: boolean,
-  botFlow?: "atendimento" | "financeiro" | null
+  botFlow?: "atendimento" | "financeiro" | null,
+  isBoletoReminder?: boolean
 ) {
+  if (isBoletoReminder) {
+    return { labels: [{ label: "LEMBRETE_BOLETO", className: "badge-boleto" }] };
+  }
   if (webhookPaused) {
     return { labels: [{ label: "Manual", className: "badge-manual" }] };
   }
@@ -2083,7 +2087,7 @@ function Inbox() {
         {error && !selectedId && !outreachOpen && <p className="wa-error pad">{error}</p>}
         <ul>
           {contacts.map((c) => {
-            const b = badgeMeta(c.status, c.webhookPaused, c.openToAll, c.botFlow);
+            const b = badgeMeta(c.status, c.webhookPaused, c.openToAll, c.botFlow, c.isBoletoReminder);
             return (
               <li key={c.id}>
                 <button
