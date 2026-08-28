@@ -134,6 +134,39 @@ export function ConnectPage() {
   const [managerUrl, setManagerUrl] = useState(
     "https://business.facebook.com/latest/whatsapp_manager/phone_numbers/?tab=phone-numbers"
   );
+  const [storeLat, setStoreLat] = useState("");
+  const [storeLng, setStoreLng] = useState("");
+  const [storeLocName, setStoreLocName] = useState("");
+  const [storeLocAddress, setStoreLocAddress] = useState("");
+  const [storeLocMessage, setStoreLocMessage] = useState("");
+
+  async function loadStoreLocation() {
+    const row = await waApi.storeLocation();
+    setStoreLat(row.latitude != null ? String(row.latitude) : "");
+    setStoreLng(row.longitude != null ? String(row.longitude) : "");
+    setStoreLocName(row.name ?? "");
+    setStoreLocAddress(row.address ?? "");
+    setStoreLocMessage(row.message ?? "");
+  }
+
+  async function saveStoreLocation() {
+    setMetaBusy(true);
+    setError("");
+    try {
+      await waApi.updateStoreLocation({
+        latitude: storeLat.trim() ? Number(storeLat) : null,
+        longitude: storeLng.trim() ? Number(storeLng) : null,
+        name: storeLocName,
+        address: storeLocAddress,
+        message: storeLocMessage,
+      });
+      await loadStoreLocation();
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setMetaBusy(false);
+    }
+  }
 
   async function load() {
     const row = await waApi.connection();
@@ -376,6 +409,7 @@ export function ConnectPage() {
 
   useEffect(() => {
     load().catch((e) => setError(String(e.message)));
+    loadStoreLocation().catch(() => {});
     loadMeta().catch(() => {});
     loadGupshup().catch(() => {});
     loadTemplates().catch(() => {});
@@ -472,6 +506,50 @@ export function ConnectPage() {
           onClick={() => void toggleBot(false)}
         >
           Desativar robô CRM
+        </button>
+      </div>
+
+      <h2>Localização da loja</h2>
+      <p className="lede">
+        Cadastro usado no atendimento WhatsApp (+ → Localização da loja). A mensagem é enviada antes
+        do pin no mapa.
+      </p>
+      <div className="admin-toolbar" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
+        <input
+          value={storeLat}
+          onChange={(e) => setStoreLat(e.target.value)}
+          placeholder="Latitude (ex: -15.601)"
+          style={{ maxWidth: "10rem" }}
+        />
+        <input
+          value={storeLng}
+          onChange={(e) => setStoreLng(e.target.value)}
+          placeholder="Longitude (ex: -56.098)"
+          style={{ maxWidth: "10rem" }}
+        />
+        <input
+          value={storeLocName}
+          onChange={(e) => setStoreLocName(e.target.value)}
+          placeholder="Nome do local"
+          style={{ minWidth: "10rem", flex: 1 }}
+        />
+        <input
+          value={storeLocAddress}
+          onChange={(e) => setStoreLocAddress(e.target.value)}
+          placeholder="Endereço completo"
+          style={{ minWidth: "14rem", flex: 2 }}
+        />
+      </div>
+      <textarea
+        value={storeLocMessage}
+        onChange={(e) => setStoreLocMessage(e.target.value)}
+        placeholder="Mensagem enviada junto (ex: Estamos te esperando na loja! Horário: seg–sex 8h–18h.)"
+        rows={3}
+        style={{ width: "100%", marginBottom: "0.65rem" }}
+      />
+      <div className="admin-toolbar">
+        <button type="button" disabled={metaBusy} onClick={() => void saveStoreLocation()}>
+          Salvar localização
         </button>
       </div>
 

@@ -226,6 +226,45 @@ export const waApi = {
         ...(quotedMessageId ? { quotedMessageId } : {}),
       }),
     }),
+  sendLocation: (
+    contactId: string,
+    data: {
+      latitude: number;
+      longitude: number;
+      name?: string | null;
+      address?: string | null;
+      preamble?: string | null;
+    }
+  ) =>
+    request<WaMessage>("/whatsapp/messages/location", {
+      method: "POST",
+      body: JSON.stringify({ contactId, ...data }),
+    }),
+  storeLocation: () =>
+    request<{
+      latitude: number | null;
+      longitude: number | null;
+      name: string | null;
+      address: string | null;
+      message: string | null;
+    }>("/whatsapp/store-location"),
+  updateStoreLocation: (data: {
+    latitude?: number | null;
+    longitude?: number | null;
+    name?: string | null;
+    address?: string | null;
+    message?: string | null;
+  }) =>
+    request<{
+      latitude: number | null;
+      longitude: number | null;
+      name: string | null;
+      address: string | null;
+      message: string | null;
+    }>("/whatsapp/store-location", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
   sendImage: async (contactId: string, file: File, caption?: string, clientKey?: string) => {
     const form = new FormData();
     form.append("contactId", contactId);

@@ -28,6 +28,20 @@ function mediaSrc(url: string | null) {
   return path;
 }
 
+function parseLocationCoords(mediaUrl: string | null | undefined) {
+  if (!mediaUrl) return null;
+  const m = mediaUrl.trim().match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  const lat = Number(m[1]);
+  const lng = Number(m[2]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
+}
+
+function mapsUrlForCoords(lat: number, lng: number) {
+  return `https://www.google.com/maps?q=${encodeURIComponent(`${lat},${lng}`)}`;
+}
+
 function isMediaPlaceholder(body: string | null) {
   if (!body) return true;
   const t = body.replace(/\*/g, "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -40,6 +54,7 @@ function quoteKindLabel(type: string, body: string | null) {
   if (type === "video") return "Vídeo";
   if (type === "audio") return "Áudio";
   if (type === "document") return "Documento";
+  if (type === "location") return "Localização";
   return body || "Mensagem";
 }
 
@@ -112,6 +127,8 @@ function ChatBubble(props: {
   const showImage = (m.type === "image" || m.type === "sticker") && src;
   const showQuote = Boolean(quoted);
   const hideBody = isMediaPlaceholder(m.body);
+  const locCoords = m.type === "location" ? parseLocationCoords(m.mediaUrl) : null;
+  const locMapsUrl = locCoords ? mapsUrlForCoords(locCoords.lat, locCoords.lng) : null;
   const quoteThumb =
     quotedSrc &&
     (quoted?.type === "image" || quoted?.type === "sticker" || quoted?.type === "video");
@@ -254,7 +271,33 @@ function ChatBubble(props: {
               {m.body && !hideBody ? m.body : "Abrir documento"}
             </a>
           )}
-          {m.body && !hideBody && m.type !== "document" && (
+          {m.type === "location" && (
+            <a
+              className="wa-location"
+              href={locMapsUrl ?? undefined}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => {
+                if (!locMapsUrl) e.preventDefault();
+              }}
+            >
+              {locCoords && (
+                <img
+                  className="wa-location-map"
+                  src={`https://staticmap.openstreetmap.de/staticmap.php?center=${locCoords.lat},${locCoords.lng}&zoom=15&size=280x140&markers=${locCoords.lat},${locCoords.lng},red-pushpin`}
+                  alt=""
+                  loading="lazy"
+                />
+              )}
+              {m.body && !hideBody && (
+                <p>
+                  <RichText text={m.body} />
+                </p>
+              )}
+              <span className="wa-location-link">{locMapsUrl ? "Abrir no mapa" : "Localização"}</span>
+            </a>
+          )}
+          {m.body && !hideBody && m.type !== "document" && m.type !== "location" && (
             <p>
               <RichText text={m.body} />
             </p>
@@ -1339,6 +1382,13 @@ function Inbox() {
   const [outreachProduct, setOutreachProduct] = useState("");
   const [outreachFile, setOutreachFile] = useState<File | null>(null);
   const [outreachPreview, setOutreachPreview] = useState<string | null>(null);
+  const [storeLocation, setStoreLocation] = useState<{
+    latitude: number | null;
+    longitude: number | null;
+    name: string | null;
+    address: string | null;
+    message: string | null;
+  } | null>(null);
   const [newBelowCount, setNewBelowCount] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -1422,6 +1472,10 @@ function Inbox() {
       .catch(() => {
         // 401 já limpa sessão e redireciona em waApi
       });
+  }, []);
+
+  useEffect(() => {
+    waApi.storeLocation().then(setStoreLocation).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -1634,6 +1688,68 @@ function Inbox() {
     if (file.type.startsWith("audio/")) return "audio";
     if (file.type.startsWith("video/")) return "video";
     return "document";
+  }
+
+  async function sendMyLocation() {
+    if (!selectedId || readOnly) return;
+    if (!navigator.geolocation) {
+      setError("Seu navegador não suporta geolocalização.");
+      setAttachOpen(false);
+      return;
+    }
+    setAttachOpen(false);
+    setBusy(true);
+    setError("");
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 0,
+        });
+      });
+      await waApi.sendLocation(selectedId, {
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        name: "Minha localização",
+        address: "Localização atual",
+      });
+      await refreshMessages(selectedId, user?.role === "admin");
+    } catch (e) {
+      const geo = e as GeolocationPositionError;
+      if (geo.code === 1) setError("Permita o acesso à localização no navegador.");
+      else if (geo.code === 2) setError("Não foi possível obter sua localização.");
+      else if (geo.code === 3) setError("Tempo esgotado ao buscar localização.");
+      else setError(String((e as Error).message));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendStoreLocation() {
+    if (!selectedId || readOnly) return;
+    if (storeLocation?.latitude == null || storeLocation?.longitude == null) {
+      setError("Localização da loja não configurada. Peça ao administrador em Conectar WhatsApp.");
+      setAttachOpen(false);
+      return;
+    }
+    setAttachOpen(false);
+    setBusy(true);
+    setError("");
+    try {
+      await waApi.sendLocation(selectedId, {
+        latitude: storeLocation.latitude,
+        longitude: storeLocation.longitude,
+        name: storeLocation.name,
+        address: storeLocation.address,
+        preamble: storeLocation.message,
+      });
+      await refreshMessages(selectedId, user?.role === "admin");
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function sendMediaFile(
@@ -2498,6 +2614,16 @@ function Inbox() {
                         }}
                       >
                         Câmera
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!storeLocation?.latitude || !storeLocation?.longitude}
+                        onClick={() => void sendStoreLocation()}
+                      >
+                        Localização da loja
+                      </button>
+                      <button type="button" onClick={() => void sendMyLocation()}>
+                        Minha localização
                       </button>
                     </div>
                   )}
