@@ -574,7 +574,7 @@ export function ConnectPage() {
       <textarea
         value={storeLocMessage}
         onChange={(e) => setStoreLocMessage(e.target.value)}
-        placeholder="Mensagem enviada junto (ex: Estamos te esperando na loja! Horário: seg–sex 8h–18h.)"
+        placeholder="Mensagem enviada junto (ex: Estamos te esperando na loja! Horário: seg–sex 8h–18h, sáb 8h–16h.)"
         rows={3}
         style={{ width: "100%", marginBottom: "0.65rem" }}
       />

@@ -290,10 +290,10 @@ export const waApi = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
-  sendPix: (contactId: string) =>
+  sendPix: (contactId: string, amountCents: number) =>
     request<WaMessage>("/whatsapp/messages/pix", {
       method: "POST",
-      body: JSON.stringify({ contactId }),
+      body: JSON.stringify({ contactId, amountCents }),
     }),
   sendImage: async (contactId: string, file: File, caption?: string, clientKey?: string) => {
     const form = new FormData();

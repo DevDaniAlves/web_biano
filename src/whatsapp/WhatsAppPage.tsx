@@ -68,6 +68,18 @@ function parsePixBubble(m: WaMessage): { merchantName: string; keyLabel: string;
   return { merchantName, keyLabel, rawKey };
 }
 
+function formatPixMoneyCents(cents: number): string {
+  return (cents / 100).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function pixMoneyDigitsFromInput(raw: string): number {
+  const digits = raw.replace(/\D/g, "").slice(0, 12);
+  return parseInt(digits || "0", 10);
+}
+
 function scrollToQuoted(messageId: string | null, externalId?: string | null) {
   const el =
     (messageId && document.getElementById(`msg-${messageId}`)) ||
@@ -1437,6 +1449,9 @@ function Inbox() {
     merchantName: string | null;
     message: string | null;
   } | null>(null);
+  const [pixOpen, setPixOpen] = useState(false);
+  const [pixAmountCents, setPixAmountCents] = useState(0);
+  const [pixAmountDisplay, setPixAmountDisplay] = useState("0,00");
   const [newBelowCount, setNewBelowCount] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -1801,7 +1816,7 @@ function Inbox() {
     }
   }
 
-  async function sendPixKey() {
+  function openPixModal() {
     if (!selectedId || readOnly) return;
     if (!pixConfig?.key) {
       setError("Chave Pix não configurada. Peça ao administrador em Conectar WhatsApp.");
@@ -1809,13 +1824,33 @@ function Inbox() {
       return;
     }
     setAttachOpen(false);
+    setError("");
+    setPixAmountCents(0);
+    setPixAmountDisplay("0,00");
+    setPixOpen(true);
+  }
+
+  function onPixAmountInput(raw: string) {
+    const cents = pixMoneyDigitsFromInput(raw);
+    setPixAmountCents(cents);
+    setPixAmountDisplay(formatPixMoneyCents(cents));
+  }
+
+  async function submitPixAmount(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (!selectedId || readOnly) return;
+    if (pixAmountCents < 1) {
+      setError("Informe um valor maior que zero.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
-      await waApi.sendPix(selectedId);
+      await waApi.sendPix(selectedId, pixAmountCents);
+      setPixOpen(false);
       await refreshMessages(selectedId, user?.role === "admin");
-    } catch (e) {
-      setError(String((e as Error).message));
+    } catch (err) {
+      setError(String((err as Error).message));
     } finally {
       setBusy(false);
     }
@@ -2709,7 +2744,7 @@ function Inbox() {
                       <button
                         type="button"
                         disabled={!pixConfig?.key}
-                        onClick={() => void sendPixKey()}
+                        onClick={() => openPixModal()}
                       >
                         Pix
                       </button>
@@ -2793,6 +2828,52 @@ function Inbox() {
           </>
         )}
       </section>
+
+      {pixOpen && (
+        <div
+          className="wa-outreach-overlay"
+          role="dialog"
+          aria-label="Valor do Pix"
+          onClick={() => !busy && setPixOpen(false)}
+        >
+          <form
+            className="wa-outreach-modal"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={(e) => void submitPixAmount(e)}
+          >
+            <h3>Enviar Pix</h3>
+            <p className="wa-outreach-hint">
+              Digite o valor da cobrança. Os centavos entram primeiro (ex.: 1 → 0,01 · 1500 → 15,00).
+            </p>
+            {error && <p className="wa-error">{error}</p>}
+            <label>
+              Valor (R$)
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                value={pixAmountDisplay}
+                onChange={(e) => onPixAmountInput(e.target.value)}
+                placeholder="0,00"
+                aria-label="Valor do Pix em reais"
+              />
+            </label>
+            <div className="wa-outreach-actions">
+              <button
+                type="button"
+                className="ghost"
+                disabled={busy}
+                onClick={() => setPixOpen(false)}
+              >
+                Cancelar
+              </button>
+              <button type="submit" disabled={busy || pixAmountCents < 1}>
+                {busy ? "Enviando…" : "Enviar Pix"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {outreachOpen && (
         <div
