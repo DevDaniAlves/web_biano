@@ -1372,6 +1372,15 @@ export function CatalogAdminPage() {
                   await waApi.reorderProductImages(productId, imageIds);
                   await load();
                 }}
+                onReplace={async (productId, imageId, file) => {
+                  setUploadingId(productId);
+                  try {
+                    await waApi.replaceProductImage(productId, imageId, file);
+                    await load();
+                  } finally {
+                    setUploadingId(null);
+                  }
+                }}
               />
             </div>
             <div className="catalog-admin-product-info">

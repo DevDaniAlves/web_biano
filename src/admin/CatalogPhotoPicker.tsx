@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ImageCropModal } from "./ImageCropModal";
 import "./CatalogPhotoPicker.css";
+import "./ImageCropModal.css";
 
 export type PendingPhoto = {
   id: string;
@@ -20,18 +22,31 @@ type CarouselItem = {
   src: string;
 };
 
+type CropState = {
+  src: string;
+  fileName: string;
+  mode: "add" | "replace-pending" | "replace-saved";
+  pendingId?: string;
+  savedImageId?: string;
+  revokeOnClose?: boolean;
+};
+
 function PhotoCarousel({
   items,
   idx,
   onIdxChange,
   compact,
   label,
+  onCrop,
+  cropDisabled,
 }: {
   items: CarouselItem[];
   idx: number;
   onIdxChange: (i: number) => void;
   compact?: boolean;
   label?: string;
+  onCrop?: () => void;
+  cropDisabled?: boolean;
 }) {
   if (!items.length) return null;
   const safeIdx = Math.min(idx, items.length - 1);
@@ -65,6 +80,16 @@ function PhotoCarousel({
           </>
         )}
       </div>
+      {onCrop && (
+        <button
+          type="button"
+          className="catalog-photo-crop-btn"
+          disabled={cropDisabled}
+          onClick={onCrop}
+        >
+          Recortar 1:1
+        </button>
+      )}
       {items.length > 1 && (
         <div className="catalog-photo-dots">
           {items.map((item, i) => (
@@ -148,18 +173,18 @@ function PhotoStrip({
 function AddPhotoButtons({
   disabled,
   maxReached,
-  onAdd,
+  onPick,
 }: {
   disabled?: boolean;
   maxReached?: boolean;
-  onAdd: (file: File) => void;
+  onPick: (file: File) => void;
 }) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
 
   const pick = (file: File | undefined) => {
     if (!file || disabled || maxReached) return;
-    onAdd(file);
+    onPick(file);
   };
 
   return (
@@ -223,12 +248,21 @@ export function CatalogPhotoPicker({
   maxPhotos?: number;
 }) {
   const [idx, setIdx] = useState(0);
+  const [crop, setCrop] = useState<CropState | null>(null);
+  const [cropBusy, setCropBusy] = useState(false);
 
   useEffect(() => {
     if (idx >= photos.length && photos.length > 0) setIdx(photos.length - 1);
   }, [photos.length, idx]);
 
-  const addFile = useCallback(
+  const closeCrop = useCallback(() => {
+    setCrop((current) => {
+      if (current?.revokeOnClose) URL.revokeObjectURL(current.src);
+      return null;
+    });
+  }, []);
+
+  const addCroppedFile = useCallback(
     (file: File) => {
       if (photos.length >= maxPhotos) return;
       const pending: PendingPhoto = {
@@ -242,6 +276,24 @@ export function CatalogPhotoPicker({
     [photos, onChange, maxPhotos]
   );
 
+  const replacePendingFile = useCallback(
+    (pendingId: string, file: File) => {
+      const i = photos.findIndex((p) => p.id === pendingId);
+      if (i < 0) return;
+      const old = photos[i];
+      URL.revokeObjectURL(old.previewUrl);
+      const next = [...photos];
+      next[i] = {
+        id: old.id,
+        file,
+        previewUrl: URL.createObjectURL(file),
+      };
+      onChange(next);
+      setIdx(i);
+    },
+    [photos, onChange]
+  );
+
   const removeAt = (i: number) => {
     const removed = photos[i];
     if (removed) URL.revokeObjectURL(removed.previewUrl);
@@ -251,26 +303,53 @@ export function CatalogPhotoPicker({
   };
 
   const items: CarouselItem[] = photos.map((p) => ({ id: p.id, src: p.previewUrl }));
+  const current = photos[idx];
 
   return (
     <div className="catalog-photo-picker">
       <div className="catalog-photo-picker-head">
         <strong>Fotos</strong>
-        <span className="catalog-photo-picker-hint">Uma foto por vez — use as setas para definir a ordem</span>
+        <span className="catalog-photo-picker-hint">
+          Formato quadrado 1:1 — ajuste o recorte após tirar ou escolher da galeria
+        </span>
       </div>
       {items.length > 0 && (
-        <PhotoCarousel items={items} idx={idx} onIdxChange={setIdx} label="Pré-visualização" />
+        <PhotoCarousel
+          items={items}
+          idx={idx}
+          onIdxChange={setIdx}
+          label="Pré-visualização"
+          cropDisabled={disabled || cropBusy}
+          onCrop={
+            current
+              ? () =>
+                  setCrop({
+                    src: current.previewUrl,
+                    fileName: current.file.name,
+                    mode: "replace-pending",
+                    pendingId: current.id,
+                  })
+              : undefined
+          }
+        />
       )}
       <AddPhotoButtons
-        disabled={disabled}
+        disabled={disabled || cropBusy}
         maxReached={photos.length >= maxPhotos}
-        onAdd={addFile}
+        onPick={(file) =>
+          setCrop({
+            src: URL.createObjectURL(file),
+            fileName: file.name,
+            mode: "add",
+            revokeOnClose: true,
+          })
+        }
       />
       <PhotoStrip
         items={items}
         activeIdx={idx}
         onSelect={setIdx}
-        disabled={disabled}
+        disabled={disabled || cropBusy}
         onMoveLeft={(i) => {
           const next = moveItem(photos, i, i - 1);
           onChange(next);
@@ -283,6 +362,27 @@ export function CatalogPhotoPicker({
         }}
         onRemove={removeAt}
       />
+
+      {crop && (
+        <ImageCropModal
+          imageSrc={crop.src}
+          fileName={crop.fileName}
+          busy={cropBusy}
+          onCancel={closeCrop}
+          onConfirm={async (file) => {
+            setCropBusy(true);
+            try {
+              if (crop.mode === "add") addCroppedFile(file);
+              else if (crop.mode === "replace-pending" && crop.pendingId) {
+                replacePendingFile(crop.pendingId, file);
+              }
+              closeCrop();
+            } finally {
+              setCropBusy(false);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -299,6 +399,7 @@ export function CatalogProductPhotos({
   onUpload,
   onDelete,
   onReorder,
+  onReplace,
 }: {
   productId: string;
   images: ProductImageRow[];
@@ -308,9 +409,11 @@ export function CatalogProductPhotos({
   onUpload: (productId: string, file: File) => Promise<void>;
   onDelete: (productId: string, imageId: string) => Promise<void>;
   onReorder: (productId: string, imageIds: string[]) => Promise<void>;
+  onReplace: (productId: string, imageId: string, file: File) => Promise<void>;
 }) {
   const [idx, setIdx] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [crop, setCrop] = useState<CropState | null>(null);
   const sorted = [...images].sort((a, b) => a.sortOrder - b.sortOrder);
 
   useEffect(() => {
@@ -321,6 +424,8 @@ export function CatalogProductPhotos({
     id: img.id,
     src: mediaSrc(img.imageUrl),
   }));
+
+  const current = sorted[idx];
 
   const reorder = async (from: number, to: number) => {
     if (to < 0 || to >= sorted.length || from === to || busy) return;
@@ -334,15 +439,11 @@ export function CatalogProductPhotos({
     }
   };
 
-  const addFile = async (file: File) => {
-    if (busy || uploading || sorted.length >= 12) return;
-    setBusy(true);
-    try {
-      await onUpload(productId, file);
-      setIdx(sorted.length);
-    } finally {
-      setBusy(false);
-    }
+  const closeCrop = () => {
+    setCrop((currentCrop) => {
+      if (currentCrop?.revokeOnClose) URL.revokeObjectURL(currentCrop.src);
+      return null;
+    });
   };
 
   const removeAt = async (i: number) => {
@@ -362,12 +463,36 @@ export function CatalogProductPhotos({
   return (
     <div className="catalog-photo-picker compact-mode">
       {items.length > 0 && (
-        <PhotoCarousel items={items} idx={idx} onIdxChange={setIdx} compact />
+        <PhotoCarousel
+          items={items}
+          idx={idx}
+          onIdxChange={setIdx}
+          compact
+          cropDisabled={isDisabled}
+          onCrop={
+            current
+              ? () =>
+                  setCrop({
+                    src: mediaSrc(current.imageUrl),
+                    fileName: `catalog-${current.id}.jpg`,
+                    mode: "replace-saved",
+                    savedImageId: current.id,
+                  })
+              : undefined
+          }
+        />
       )}
       <AddPhotoButtons
         disabled={isDisabled}
         maxReached={sorted.length >= 12}
-        onAdd={(file) => void addFile(file)}
+        onPick={(file) =>
+          setCrop({
+            src: URL.createObjectURL(file),
+            fileName: file.name,
+            mode: "add",
+            revokeOnClose: true,
+          })
+        }
       />
       {(uploading || busy) && <span className="catalog-photo-uploading">Enviando…</span>}
       <PhotoStrip
@@ -379,6 +504,29 @@ export function CatalogProductPhotos({
         onMoveRight={(i) => void reorder(i, i + 1)}
         onRemove={(i) => void removeAt(i)}
       />
+
+      {crop && (
+        <ImageCropModal
+          imageSrc={crop.src}
+          fileName={crop.fileName}
+          busy={busy || uploading}
+          onCancel={closeCrop}
+          onConfirm={async (file) => {
+            setBusy(true);
+            try {
+              if (crop.mode === "add") {
+                await onUpload(productId, file);
+                setIdx(sorted.length);
+              } else if (crop.mode === "replace-saved" && crop.savedImageId) {
+                await onReplace(productId, crop.savedImageId, file);
+              }
+              closeCrop();
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

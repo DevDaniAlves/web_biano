@@ -796,6 +796,14 @@ export const waApi = {
     request<CatalogProduct>(`/catalog/admin/products/${productId}/images/${imageId}`, {
       method: "DELETE",
     }),
+  replaceProductImage: (productId: string, imageId: string, file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<CatalogProduct>(`/catalog/admin/products/${productId}/images/${imageId}`, {
+      method: "PUT",
+      body: fd,
+    });
+  },
   reorderProductImages: (productId: string, imageIds: string[]) =>
     request<CatalogProduct>(`/catalog/admin/products/${productId}/images/order`, {
       method: "PUT",
