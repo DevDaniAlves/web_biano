@@ -19,31 +19,53 @@ export async function loadImageFromFile(file: File): Promise<HTMLImageElement> {
 
 export type CropRect = { x: number; y: number; size: number };
 
-/** Calcula recorte 1:1 em pixels da imagem original. */
-export function computeSquareCrop(
+export function fitImageDisplay(
   imgW: number,
   imgH: number,
-  viewSize: number,
-  zoom: number,
-  panX: number,
-  panY: number
+  maxW: number,
+  maxH: number
+): { scale: number; width: number; height: number } {
+  const scale = Math.min(maxW / imgW, maxH / imgH);
+  return { scale, width: imgW * scale, height: imgH * scale };
+}
+
+export function maxSquareCropSize(dispW: number, dispH: number): number {
+  return Math.min(dispW, dispH);
+}
+
+export function centerCropBox(dispW: number, dispH: number, size: number) {
+  return {
+    x: Math.max(0, (dispW - size) / 2),
+    y: Math.max(0, (dispH - size) / 2),
+  };
+}
+
+export function clampCropBox(
+  x: number,
+  y: number,
+  size: number,
+  dispW: number,
+  dispH: number
+) {
+  return {
+    x: Math.max(0, Math.min(x, dispW - size)),
+    y: Math.max(0, Math.min(y, dispH - size)),
+    size,
+  };
+}
+
+/** Converte recorte na tela (px) para pixels da imagem original. */
+export function displayCropToNatural(
+  scale: number,
+  cropX: number,
+  cropY: number,
+  cropSize: number
 ): CropRect {
-  const baseScale = viewSize / Math.min(imgW, imgH);
-  const scale = baseScale * zoom;
-  const dispW = imgW * scale;
-  const dispH = imgH * scale;
-  const imgLeft = (viewSize - dispW) / 2 + panX;
-  const imgTop = (viewSize - dispH) / 2 + panY;
-
-  let cropX = (0 - imgLeft) / scale;
-  let cropY = (0 - imgTop) / scale;
-  let cropSize = viewSize / scale;
-
-  cropSize = Math.min(cropSize, imgW, imgH);
-  cropX = Math.max(0, Math.min(cropX, imgW - cropSize));
-  cropY = Math.max(0, Math.min(cropY, imgH - cropSize));
-
-  return { x: cropX, y: cropY, size: cropSize };
+  return {
+    x: cropX / scale,
+    y: cropY / scale,
+    size: cropSize / scale,
+  };
 }
 
 export async function cropImageToFile(

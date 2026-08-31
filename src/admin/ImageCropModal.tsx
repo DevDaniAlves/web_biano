@@ -1,12 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  computeSquareCrop,
+  centerCropBox,
+  clampCropBox,
   cropImageToFile,
+  displayCropToNatural,
+  fitImageDisplay,
   loadImageElement,
+  maxSquareCropSize,
 } from "../lib/cropImage";
 import "./ImageCropModal.css";
 
-const VIEW_SIZE = 320;
+const STAGE_MAX_W = 360;
+const STAGE_MAX_H = 420;
 
 export function ImageCropModal({
   imageSrc,
@@ -25,8 +30,8 @@ export function ImageCropModal({
 }) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const dragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0, size: 0 });
+  const dragRef = useRef<{ x: number; y: number; cropX: number; cropY: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,14 +43,46 @@ export function ImageCropModal({
     };
   }, [imageSrc]);
 
+  const layout = useMemo(() => {
+    if (!img) return null;
+    const fit = fitImageDisplay(img.naturalWidth, img.naturalHeight, STAGE_MAX_W, STAGE_MAX_H);
+    const maxCrop = maxSquareCropSize(fit.width, fit.height);
+    const cropSize = Math.max(48, maxCrop / zoom);
+    const centered = centerCropBox(fit.width, fit.height, cropSize);
+    return { ...fit, maxCrop, cropSize, centered };
+  }, [img, zoom]);
+
+  useEffect(() => {
+    if (!layout) return;
+    setCrop((prev) => {
+      const size = layout.cropSize;
+      if (prev.size === 0) {
+        return clampCropBox(
+          layout.centered.x,
+          layout.centered.y,
+          size,
+          layout.width,
+          layout.height
+        );
+      }
+      const cx = prev.x + prev.size / 2;
+      const cy = prev.y + prev.size / 2;
+      return clampCropBox(cx - size / 2, cy - size / 2, size, layout.width, layout.height);
+    });
+  }, [layout]);
+
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
       const drag = dragRef.current;
-      if (!drag) return;
-      setPan({
-        x: drag.panX + (e.clientX - drag.x),
-        y: drag.panY + (e.clientY - drag.y),
-      });
+      if (!drag || !layout) return;
+      const next = clampCropBox(
+        drag.cropX + (e.clientX - drag.x),
+        drag.cropY + (e.clientY - drag.y),
+        crop.size,
+        layout.width,
+        layout.height
+      );
+      setCrop(next);
     };
     const onUp = () => {
       dragRef.current = null;
@@ -58,26 +95,12 @@ export function ImageCropModal({
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, []);
-
-  const baseScale = img ? VIEW_SIZE / Math.min(img.naturalWidth, img.naturalHeight) : 1;
-  const scale = baseScale * zoom;
-  const dispW = img ? img.naturalWidth * scale : 0;
-  const dispH = img ? img.naturalHeight * scale : 0;
-  const imgLeft = (VIEW_SIZE - dispW) / 2 + pan.x;
-  const imgTop = (VIEW_SIZE - dispH) / 2 + pan.y;
+  }, [layout, crop.size]);
 
   async function handleConfirm() {
-    if (!img) return;
-    const crop = computeSquareCrop(
-      img.naturalWidth,
-      img.naturalHeight,
-      VIEW_SIZE,
-      zoom,
-      pan.x,
-      pan.y
-    );
-    const file = await cropImageToFile(img, crop, fileName);
+    if (!img || !layout) return;
+    const natural = displayCropToNatural(layout.scale, crop.x, crop.y, crop.size);
+    const file = await cropImageToFile(img, natural, fileName);
     await onConfirm(file);
   }
 
@@ -86,38 +109,54 @@ export function ImageCropModal({
       <div className="image-crop-modal">
         <div className="image-crop-head">
           <h3>{title}</h3>
-          <p>Arraste para posicionar e use o zoom. O quadrado central será a foto do catálogo.</p>
+          <p>
+            A imagem inteira fica visível. Arraste o quadrado pontilhado para escolher o recorte 1:1.
+          </p>
         </div>
 
         <div
-          className="image-crop-viewport"
-          style={{ width: VIEW_SIZE, height: VIEW_SIZE }}
-          onPointerDown={(e) => {
-            if (!img || busy) return;
-            e.currentTarget.setPointerCapture(e.pointerId);
-            dragRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
-          }}
+          className="image-crop-stage"
+          style={
+            layout
+              ? { width: layout.width, height: layout.height }
+              : { width: STAGE_MAX_W, height: STAGE_MAX_H }
+          }
         >
-          {!img ? (
+          {!img || !layout ? (
             <div className="image-crop-loading">Carregando…</div>
           ) : (
-            <img
-              src={imageSrc}
-              alt=""
-              draggable={false}
-              style={{
-                width: img.naturalWidth,
-                height: img.naturalHeight,
-                transform: `translate(${imgLeft}px, ${imgTop}px) scale(${scale})`,
-                transformOrigin: "top left",
-              }}
-            />
+            <>
+              <img
+                src={imageSrc}
+                alt=""
+                draggable={false}
+                className="image-crop-full"
+                style={{ width: layout.width, height: layout.height }}
+              />
+              <div
+                className="image-crop-box"
+                style={{
+                  width: crop.size,
+                  height: crop.size,
+                  transform: `translate(${crop.x}px, ${crop.y}px)`,
+                }}
+                onPointerDown={(e) => {
+                  if (busy) return;
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                  dragRef.current = {
+                    x: e.clientX,
+                    y: e.clientY,
+                    cropX: crop.x,
+                    cropY: crop.y,
+                  };
+                }}
+              />
+            </>
           )}
-          <div className="image-crop-frame" aria-hidden />
         </div>
 
         <label className="image-crop-zoom">
-          <span>Zoom</span>
+          <span>Zoom do recorte</span>
           <input
             type="range"
             min={1}

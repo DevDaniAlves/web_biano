@@ -99,14 +99,11 @@
 .catalog-photo-carousel-stage {
   position: relative;
   aspect-ratio: 1;
-  min-height: 180px;
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid var(--line);
-  background: var(--black-3, #111);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: var(--input-bg, #eee);
+  padding: 0;
 }
 
 .catalog-photo-carousel-stage img {
