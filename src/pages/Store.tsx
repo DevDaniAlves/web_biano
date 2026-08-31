@@ -150,17 +150,17 @@ export function Store() {
         </div>
         <div className="catalog-grid">
           {products.map((p, i) => (
-            <div key={p.id} style={{ animationDelay: `${0.04 * i}s` }}>
-              <ProductCard
-                product={p}
-                mediaSrc={storeMediaSrc}
-                sellerHref={
-                  waPhone && mode === "wa_me"
-                    ? waMeLink(waPhone, sellerMessage(keyword, p.name))
-                    : null
-                }
-              />
-            </div>
+            <ProductCard
+              key={p.id}
+              product={p}
+              mediaSrc={storeMediaSrc}
+              sellerHref={
+                waPhone && mode === "wa_me"
+                  ? waMeLink(waPhone, sellerMessage(keyword, p.name))
+                  : null
+              }
+              style={{ animationDelay: `${0.04 * i}s` }}
+            />
           ))}
           {products.length === 0 && (
             <p className="catalog-empty">Nenhum item publicado ainda.</p>

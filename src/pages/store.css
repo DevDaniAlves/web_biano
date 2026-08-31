@@ -147,6 +147,20 @@
   gap: 1rem;
 }
 
+.catalog-grid > * {
+  min-width: 0;
+}
+
+.catalog-grid .product-card,
+.catalog-grid .product-media {
+  padding: 0;
+  margin: 0;
+}
+
+.catalog-grid .product-media img {
+  object-fit: cover;
+}
+
 @media (max-width: 980px) {
   .store-hero {
     grid-template-columns: 1fr;

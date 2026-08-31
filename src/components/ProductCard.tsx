@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import "./ProductCard.css";
 
 export interface StoreProduct {
@@ -20,10 +20,12 @@ export function ProductCard({
   product,
   sellerHref,
   mediaSrc = (u) => u,
+  style,
 }: {
   product: StoreProduct;
   sellerHref?: string | null;
   mediaSrc?: (url: string) => string;
+  style?: CSSProperties;
 }) {
   const gallery = (
     product.images?.length ? product.images : [product.imageUrl || product.image || ""]
@@ -32,7 +34,7 @@ export function ProductCard({
   const img = gallery[idx] ?? "";
 
   return (
-    <article className="product-card">
+    <article className="product-card" style={style}>
       <div className="product-media">
         {product.tag && <span className="product-tag">{product.tag}</span>}
         {img ? (
