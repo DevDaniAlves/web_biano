@@ -6,6 +6,7 @@ import {
   revokePendingPhotos,
   type PendingPhoto,
 } from "./CatalogPhotoPicker";
+import { formatPriceBr, parsePriceBr } from "../lib/price";
 import { waApi } from "../whatsapp/waApi";
 
 export { ReportsPage } from "./ReportsPage";
@@ -1200,11 +1201,16 @@ export function CatalogAdminPage() {
   async function create(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    const parsedPrice = parsePriceBr(price);
+    if (parsedPrice == null) {
+      setError("Informe um preço válido (ex.: 49,90)");
+      return;
+    }
     setBusy(true);
     try {
       const product = await waApi.createProduct({
         name,
-        price: Number(price),
+        price: parsedPrice,
         description: description || undefined,
       });
       if (newPhotos.length) {
@@ -1251,6 +1257,25 @@ export function CatalogAdminPage() {
     }
   }
 
+  async function savePrice(productId: string, raw: string, current: number) {
+    const parsed = parsePriceBr(raw);
+    if (parsed == null) {
+      setError("Informe um preço válido (ex.: 49,90)");
+      return;
+    }
+    if (parsed === current) return;
+    setError("");
+    setBusy(true);
+    try {
+      await waApi.updateProduct(productId, { price: parsed });
+      await load();
+    } catch (err) {
+      setError(String((err as Error).message));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="admin-panel">
       <div className="admin-panel-head">
@@ -1273,94 +1298,97 @@ export function CatalogAdminPage() {
         </label>
       </div>
 
-      <form className="admin-toolbar catalog-create-form" onSubmit={(e) => void create(e)}>
-        <div className="catalog-create-fields">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome" required />
-          <input
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            placeholder="Preço"
-            required
-          />
-          <input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Descrição"
-          />
-          <button type="submit" disabled={busy}>
-            {busy ? "Salvando…" : "Adicionar item"}
-          </button>
-        </div>
-        <CatalogPhotoPicker photos={newPhotos} onChange={setNewPhotos} disabled={busy} />
-      </form>
+      <div className="catalog-create-section">
+        <form className="admin-toolbar catalog-create-info" onSubmit={(e) => void create(e)}>
+          <h2 className="catalog-section-title">Informações do item</h2>
+          <div className="catalog-create-fields">
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome" required />
+            <input
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              placeholder="Preço (ex.: 49,90)"
+              inputMode="decimal"
+              required
+            />
+            <input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Descrição"
+            />
+            <button type="submit" disabled={busy}>
+              {busy ? "Salvando…" : "Adicionar item"}
+            </button>
+          </div>
+        </form>
 
-      <div className="admin-table-wrap">
-        <table className="admin-table catalog-products-table">
-          <thead>
-            <tr>
-              <th>Fotos</th>
-              <th>Nome</th>
-              <th>Preço</th>
-              <th>Status</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((p) => (
-              <tr key={p.id}>
-                <td className="catalog-photos-cell">
-                  <CatalogProductPhotos
-                    productId={p.id}
-                    images={p.productImages ?? []}
-                    mediaSrc={catalogMediaSrc}
-                    uploading={uploadingId === p.id}
-                    onUpload={uploadOnePhoto}
-                    onDelete={async (productId, imageId) => {
-                      await waApi.deleteProductImage(productId, imageId);
-                      await load();
-                    }}
-                    onReorder={async (productId, imageIds) => {
-                      await waApi.reorderProductImages(productId, imageIds);
-                      await load();
-                    }}
-                  />
-                </td>
-                <td>
+        <div className="admin-toolbar catalog-create-photos">
+          <h2 className="catalog-section-title">Fotos do item</h2>
+          <CatalogPhotoPicker photos={newPhotos} onChange={setNewPhotos} disabled={busy} />
+        </div>
+      </div>
+
+      <div className="catalog-admin-list">
+        {products.map((p) => (
+          <article key={p.id} className="catalog-admin-product">
+            <div className="catalog-admin-product-media">
+              <CatalogProductPhotos
+                productId={p.id}
+                images={p.productImages ?? []}
+                mediaSrc={catalogMediaSrc}
+                uploading={uploadingId === p.id}
+                onUpload={uploadOnePhoto}
+                onDelete={async (productId, imageId) => {
+                  await waApi.deleteProductImage(productId, imageId);
+                  await load();
+                }}
+                onReorder={async (productId, imageIds) => {
+                  await waApi.reorderProductImages(productId, imageIds);
+                  await load();
+                }}
+              />
+            </div>
+            <div className="catalog-admin-product-info">
+              <div className="catalog-admin-product-head">
+                <div>
                   <strong>{p.name}</strong>
                   {p.description && (
-                    <div style={{ color: "var(--muted)", fontSize: "0.78rem" }}>{p.description}</div>
+                    <div className="catalog-admin-product-desc">{p.description}</div>
                   )}
-                </td>
-                <td>{p.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
-                <td>
-                  <span className={`admin-pill${p.active ? " ok" : " warn"}`}>
-                    {p.active ? "Ativo" : "Inativo"}
-                  </span>
-                </td>
-                <td>
-                  <div className="actions">
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={() =>
-                        void waApi.updateProduct(p.id, { active: !p.active }).then(load)
-                      }
-                    >
-                      {p.active ? "Desativar" : "Ativar"}
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={() => void waApi.deleteProduct(p.id).then(load)}
-                    >
-                      Remover
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </div>
+                <span className={`admin-pill${p.active ? " ok" : " warn"}`}>
+                  {p.active ? "Ativo" : "Inativo"}
+                </span>
+              </div>
+              <label className="catalog-admin-price-field">
+                <span>Preço</span>
+                <input
+                  key={`${p.id}-${p.price}`}
+                  defaultValue={formatPriceBr(p.price)}
+                  disabled={busy}
+                  onBlur={(e) => void savePrice(p.id, e.target.value, p.price)}
+                />
+              </label>
+              <div className="actions">
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() =>
+                    void waApi.updateProduct(p.id, { active: !p.active }).then(load)
+                  }
+                >
+                  {p.active ? "Desativar" : "Ativar"}
+                </button>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => void waApi.deleteProduct(p.id).then(load)}
+                >
+                  Remover
+                </button>
+              </div>
+            </div>
+          </article>
+        ))}
       </div>
     </div>
   );

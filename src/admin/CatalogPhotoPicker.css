@@ -10,8 +10,10 @@
 
 .catalog-photo-picker.compact-mode {
   flex: unset;
-  padding: 0.45rem;
-  min-width: 160px;
+  padding: 0;
+  min-width: 0;
+  border: none;
+  background: transparent;
 }
 
 .catalog-photo-picker-head {
@@ -257,6 +259,12 @@
 }
 
 .catalog-create-form {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.catalog-create-info,
+.catalog-create-photos {
   flex-direction: column;
   align-items: stretch;
 }
