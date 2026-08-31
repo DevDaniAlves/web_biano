@@ -18,3 +18,11 @@ export function formatPriceBr(value: number): string {
     maximumFractionDigits: 2,
   });
 }
+
+/** Máscara centavos → reais enquanto digita (1 → 0,01 · 4990 → 49,90). */
+export function maskPriceBrInput(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 11);
+  if (!digits) return "";
+  const value = Number(digits) / 100;
+  return formatPriceBr(value);
+}

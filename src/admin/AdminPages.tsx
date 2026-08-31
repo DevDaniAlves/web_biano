@@ -6,7 +6,7 @@ import {
   revokePendingPhotos,
   type PendingPhoto,
 } from "./CatalogPhotoPicker";
-import { formatPriceBr, parsePriceBr } from "../lib/price";
+import { formatPriceBr, maskPriceBrInput, parsePriceBr } from "../lib/price";
 import { waApi } from "../whatsapp/waApi";
 
 export { ReportsPage } from "./ReportsPage";
@@ -1182,6 +1182,10 @@ export function CatalogAdminPage() {
   const [description, setDescription] = useState("");
   const [newPhotos, setNewPhotos] = useState<PendingPhoto[]>([]);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editPrice, setEditPrice] = useState("");
+  const [editDescription, setEditDescription] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -1257,17 +1261,40 @@ export function CatalogAdminPage() {
     }
   }
 
-  async function savePrice(productId: string, raw: string, current: number) {
-    const parsed = parsePriceBr(raw);
-    if (parsed == null) {
+  function startEdit(product: CatalogProductRow) {
+    setEditingId(product.id);
+    setEditName(product.name);
+    setEditPrice(formatPriceBr(product.price));
+    setEditDescription(product.description ?? "");
+    setError("");
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditName("");
+    setEditPrice("");
+    setEditDescription("");
+  }
+
+  async function saveEdit(productId: string) {
+    const parsedPrice = parsePriceBr(editPrice);
+    if (!editName.trim()) {
+      setError("Informe o nome do item");
+      return;
+    }
+    if (parsedPrice == null) {
       setError("Informe um preço válido (ex.: 49,90)");
       return;
     }
-    if (parsed === current) return;
     setError("");
     setBusy(true);
     try {
-      await waApi.updateProduct(productId, { price: parsed });
+      await waApi.updateProduct(productId, {
+        name: editName.trim(),
+        price: parsedPrice,
+        description: editDescription.trim() || null,
+      });
+      cancelEdit();
       await load();
     } catch (err) {
       setError(String((err as Error).message));
@@ -1305,9 +1332,9 @@ export function CatalogAdminPage() {
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome" required />
             <input
               value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder="Preço (ex.: 49,90)"
-              inputMode="decimal"
+              onChange={(e) => setPrice(maskPriceBrInput(e.target.value))}
+              placeholder="0,00"
+              inputMode="numeric"
               required
             />
             <input
@@ -1348,44 +1375,98 @@ export function CatalogAdminPage() {
               />
             </div>
             <div className="catalog-admin-product-info">
-              <div className="catalog-admin-product-head">
-                <div>
-                  <strong>{p.name}</strong>
-                  {p.description && (
-                    <div className="catalog-admin-product-desc">{p.description}</div>
-                  )}
-                </div>
-                <span className={`admin-pill${p.active ? " ok" : " warn"}`}>
-                  {p.active ? "Ativo" : "Inativo"}
-                </span>
-              </div>
-              <label className="catalog-admin-price-field">
-                <span>Preço</span>
-                <input
-                  key={`${p.id}-${p.price}`}
-                  defaultValue={formatPriceBr(p.price)}
-                  disabled={busy}
-                  onBlur={(e) => void savePrice(p.id, e.target.value, p.price)}
-                />
-              </label>
-              <div className="actions">
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() =>
-                    void waApi.updateProduct(p.id, { active: !p.active }).then(load)
-                  }
+              {editingId === p.id ? (
+                <form
+                  className="catalog-admin-edit-form"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void saveEdit(p.id);
+                  }}
                 >
-                  {p.active ? "Desativar" : "Ativar"}
-                </button>
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() => void waApi.deleteProduct(p.id).then(load)}
-                >
-                  Remover
-                </button>
-              </div>
+                  <div className="catalog-admin-product-head">
+                    <h3 className="catalog-section-title">Editar item</h3>
+                    <span className={`admin-pill${p.active ? " ok" : " warn"}`}>
+                      {p.active ? "Ativo" : "Inativo"}
+                    </span>
+                  </div>
+                  <label className="catalog-admin-edit-field">
+                    <span>Nome</span>
+                    <input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      placeholder="Nome"
+                      required
+                      disabled={busy}
+                    />
+                  </label>
+                  <label className="catalog-admin-edit-field">
+                    <span>Preço</span>
+                    <input
+                      value={editPrice}
+                      onChange={(e) => setEditPrice(maskPriceBrInput(e.target.value))}
+                      placeholder="0,00"
+                      inputMode="numeric"
+                      required
+                      disabled={busy}
+                    />
+                  </label>
+                  <label className="catalog-admin-edit-field">
+                    <span>Descrição</span>
+                    <input
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                      placeholder="Descrição"
+                      disabled={busy}
+                    />
+                  </label>
+                  <div className="actions">
+                    <button type="submit" disabled={busy}>
+                      {busy ? "Salvando…" : "Salvar"}
+                    </button>
+                    <button type="button" className="ghost" disabled={busy} onClick={cancelEdit}>
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <div className="catalog-admin-product-head">
+                    <div>
+                      <strong>{p.name}</strong>
+                      <div className="catalog-admin-product-price">
+                        {p.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                      </div>
+                      {p.description && (
+                        <div className="catalog-admin-product-desc">{p.description}</div>
+                      )}
+                    </div>
+                    <span className={`admin-pill${p.active ? " ok" : " warn"}`}>
+                      {p.active ? "Ativo" : "Inativo"}
+                    </span>
+                  </div>
+                  <div className="actions">
+                    <button type="button" disabled={busy} onClick={() => startEdit(p)}>
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() =>
+                        void waApi.updateProduct(p.id, { active: !p.active }).then(load)
+                      }
+                    >
+                      {p.active ? "Desativar" : "Ativar"}
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => void waApi.deleteProduct(p.id).then(load)}
+                    >
+                      Remover
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </article>
         ))}
