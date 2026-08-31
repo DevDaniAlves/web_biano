@@ -782,7 +782,7 @@
 .catalog-admin-product-media {
   order: 1;
   width: 100%;
-  padding: 0;
+  padding: 0.85rem;
   border-bottom: 1px solid var(--line);
   background: transparent;
 }
@@ -792,12 +792,12 @@
   background: transparent;
   padding: 0;
   width: 100%;
-  gap: 0;
+  gap: 0.65rem;
 }
 
 .catalog-admin-product-media .catalog-photo-carousel,
 .catalog-admin-product-media .catalog-photo-carousel.compact {
-  max-width: 100%;
+  max-width: min(100%, 220px);
   width: 100%;
   margin: 0;
 }
@@ -805,11 +805,13 @@
 .catalog-admin-product-media .catalog-photo-carousel-stage {
   aspect-ratio: 1;
   min-height: 0;
+  max-height: 220px;
   display: block;
-  background: transparent;
+  background: var(--input-bg);
   padding: 0;
-  border: none;
-  border-radius: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
 }
 
 .catalog-admin-product-media .catalog-photo-carousel-stage img {
@@ -820,13 +822,13 @@
 }
 
 .catalog-admin-product-media .catalog-photo-crop-btn {
-  margin: 0.5rem 0.85rem 0;
+  margin: 0;
 }
 
 .catalog-admin-product-media .catalog-photo-actions,
 .catalog-admin-product-media .catalog-photo-strip,
 .catalog-admin-product-media .catalog-photo-uploading {
-  padding: 0.65rem 0.85rem 0.85rem;
+  padding: 0;
 }
 
 .catalog-admin-product-info {
