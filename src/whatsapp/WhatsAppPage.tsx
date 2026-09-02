@@ -13,6 +13,13 @@ import {
   type WaQueue,
   type WaUser,
 } from "./waApi";
+import {
+  extensionForMime,
+  mediaKindOf,
+  normalizeMediaFile,
+  pickVideoRecorderMime,
+  validateMediaFile,
+} from "./mediaUtils";
 import "./whatsapp.css";
 
 function canSeeAllMessages(user: WaUser | null | undefined) {
@@ -1423,7 +1430,7 @@ function Inbox() {
   const [busy, setBusy] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
-  const [cameraOpen, setCameraOpen] = useState(false);
+  const [captureMode, setCaptureMode] = useState<"photo" | "video" | null>(null);
   const [recording, setRecording] = useState(false);
   const [lightbox, setLightbox] = useState<{ src: string; type: "image" | "video" } | null>(null);
   const [error, setError] = useState("");
@@ -1458,6 +1465,7 @@ function Inbox() {
   const stickToBottomRef = useRef(true);
   const knownMsgIdsRef = useRef<Set<string>>(new Set());
   const galleryRef = useRef<HTMLInputElement>(null);
+  const docRef = useRef<HTMLInputElement>(null);
   /** Trava síncrona — evita Enter/clique duplo antes do setState. */
   const sendingRef = useRef(false);
   const finishingRef = useRef(false);
@@ -1747,11 +1755,14 @@ function Inbox() {
     }
   }
 
-  function mediaKindOf(file: File): "image" | "audio" | "video" | "document" {
-    if (file.type.startsWith("image/")) return "image";
-    if (file.type.startsWith("audio/")) return "audio";
-    if (file.type.startsWith("video/")) return "video";
-    return "document";
+  function prepareMediaFile(raw: File): File | null {
+    const file = normalizeMediaFile(raw);
+    const err = validateMediaFile(file);
+    if (err) {
+      setError(err);
+      return null;
+    }
+    return file;
   }
 
   async function sendMyLocation() {
@@ -1861,12 +1872,14 @@ function Inbox() {
     opts?: { caption?: string; keepBusy?: boolean; clientKey?: string }
   ) {
     if (!selectedId || readOnly) return;
+    const prepared = prepareMediaFile(file);
+    if (!prepared) return;
     if (sendingRef.current && !opts?.keepBusy) return;
     sendingRef.current = true;
     setAttachOpen(false);
     setBusy(true);
     setError("");
-    const kind = mediaKindOf(file);
+    const kind = mediaKindOf(prepared);
     const caption =
       opts?.caption !== undefined
         ? opts.caption || undefined
@@ -1876,7 +1889,7 @@ function Inbox() {
     const tempId =
       opts?.clientKey ||
       `ck-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const localUrl = URL.createObjectURL(file);
+    const localUrl = URL.createObjectURL(prepared);
     const optimistic: WaMessage = {
       id: tempId,
       contactId: selectedId,
@@ -1889,7 +1902,7 @@ function Inbox() {
           : kind === "video"
             ? "[vídeo]"
             : kind === "document"
-              ? file.name
+              ? prepared.name
               : null),
       mediaUrl: localUrl,
       clientKey: tempId,
@@ -1902,7 +1915,7 @@ function Inbox() {
     setNewBelowCount(0);
     setMessages((prev) => [...prev, optimistic]);
     try {
-      const toSend = kind === "image" ? await compressImage(file) : file;
+      const toSend = kind === "image" ? await compressImage(prepared) : prepared;
       const msg = await waApi.sendImage(selectedId, toSend, caption, tempId);
       setMessages((prev) => {
         const next = prev.filter(
@@ -1950,33 +1963,50 @@ function Inbox() {
     setNewBelowCount(0);
 
     const baseTs = Date.now();
-    const batch = list.map((file, i) => {
-      const kind = mediaKindOf(file);
-      const clientKey = `ck-${baseTs}-${i}-${Math.random().toString(36).slice(2, 9)}`;
-      const localUrl = URL.createObjectURL(file);
-      const cap = i === 0 ? caption || undefined : undefined;
-      const optimistic: WaMessage = {
-        id: clientKey,
-        contactId,
-        direction: "out",
-        type: kind,
-        body:
-          cap ??
-          (kind === "audio"
-            ? "[áudio]"
-            : kind === "video"
-              ? "[vídeo]"
-              : kind === "document"
-                ? file.name
-                : null),
-        mediaUrl: localUrl,
-        clientKey,
-        createdAt: new Date(baseTs + i).toISOString(),
-        sentBy: user ? { id: user.id, name: user.name } : null,
-        delivery: "pending",
-      };
-      return { file, kind, clientKey, localUrl, caption: cap, optimistic };
-    });
+    const batch = list
+      .map((raw, i) => {
+        const file = prepareMediaFile(raw);
+        if (!file) return null;
+        const kind = mediaKindOf(file);
+        const clientKey = `ck-${baseTs}-${i}-${Math.random().toString(36).slice(2, 9)}`;
+        const localUrl = URL.createObjectURL(file);
+        const cap = i === 0 ? caption || undefined : undefined;
+        const optimistic: WaMessage = {
+          id: clientKey,
+          contactId,
+          direction: "out",
+          type: kind,
+          body:
+            cap ??
+            (kind === "audio"
+              ? "[áudio]"
+              : kind === "video"
+                ? "[vídeo]"
+                : kind === "document"
+                  ? file.name
+                  : null),
+          mediaUrl: localUrl,
+          clientKey,
+          createdAt: new Date(baseTs + i).toISOString(),
+          sentBy: user ? { id: user.id, name: user.name } : null,
+          delivery: "pending",
+        };
+        return { file, kind, clientKey, localUrl, caption: cap, optimistic };
+      })
+      .filter(Boolean) as Array<{
+      file: File;
+      kind: ReturnType<typeof mediaKindOf>;
+      clientKey: string;
+      localUrl: string;
+      caption: string | undefined;
+      optimistic: WaMessage;
+    }>;
+
+    if (!batch.length) {
+      sendingRef.current = false;
+      setBusy(false);
+      return;
+    }
 
     setMessages((prev) => [...prev, ...batch.map((b) => b.optimistic)]);
 
@@ -2195,6 +2225,25 @@ function Inbox() {
     setError("");
     try {
       await waApi.resolve(selectedId);
+      await refreshMessages(selectedId, true);
+      await refreshContacts();
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      finishingRef.current = false;
+      setFinishing(false);
+      setBusy(false);
+    }
+  }
+
+  async function finishInactivity() {
+    if (!selectedId || finishingRef.current || busy) return;
+    finishingRef.current = true;
+    setFinishing(true);
+    setBusy(true);
+    setError("");
+    try {
+      await waApi.resolveInactivity(selectedId);
       await refreshMessages(selectedId, true);
       await refreshContacts();
     } catch (e) {
@@ -2600,7 +2649,7 @@ function Inbox() {
                     type="button"
                     className={finishing ? "wa-finishing" : ""}
                     disabled={busy || finishing}
-                    onClick={() => void finish()}
+                    onClick={() => void finishInactivity()}
                   >
                     {finishing ? (
                       <>
@@ -2720,16 +2769,34 @@ function Inbox() {
                           galleryRef.current?.click();
                         }}
                       >
-                        Foto, vídeo ou arquivo
+                        Galeria (foto ou vídeo)
                       </button>
                       <button
                         type="button"
                         onClick={() => {
                           setAttachOpen(false);
-                          setCameraOpen(true);
+                          setCaptureMode("photo");
                         }}
                       >
-                        Câmera
+                        Tirar foto
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAttachOpen(false);
+                          setCaptureMode("video");
+                        }}
+                      >
+                        Gravar vídeo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAttachOpen(false);
+                          docRef.current?.click();
+                        }}
+                      >
+                        Documento ou áudio
                       </button>
                       <button
                         type="button"
@@ -2755,7 +2822,20 @@ function Inbox() {
                   ref={galleryRef}
                   type="file"
                   multiple
-                  accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ogg,.webm,.mp4,.mp3,.m4a"
+                  accept="image/*,video/*"
+                  hidden
+                  onChange={(e) => {
+                    const files = e.target.files ? Array.from(e.target.files) : [];
+                    e.target.value = "";
+                    if (files.length === 1) void sendMediaFile(files[0]);
+                    else if (files.length > 1) void sendMediaFiles(files);
+                  }}
+                />
+                <input
+                  ref={docRef}
+                  type="file"
+                  multiple
+                  accept="audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ogg,.webm,.mp3,.m4a"
                   hidden
                   onChange={(e) => {
                     const files = e.target.files ? Array.from(e.target.files) : [];
@@ -2804,11 +2884,12 @@ function Inbox() {
               </div>
               </div>
             )}
-            {cameraOpen && (
-              <CameraCapture
-                onClose={() => setCameraOpen(false)}
+            {captureMode && (
+              <MediaCapture
+                mode={captureMode}
+                onClose={() => setCaptureMode(null)}
                 onCapture={(file) => {
-                  setCameraOpen(false);
+                  setCaptureMode(null);
                   void sendMediaFile(file);
                 }}
               />
@@ -2950,17 +3031,27 @@ function Inbox() {
   );
 }
 
-function CameraCapture({
+function MediaCapture({
+  mode,
   onClose,
   onCapture,
 }: {
+  mode: "photo" | "video";
   onClose: () => void;
   onCapture: (file: File) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<number | null>(null);
+  const cancelRef = useRef(false);
   const [err, setErr] = useState("");
   const [ready, setReady] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+
+  const withAudio = mode === "video";
 
   useEffect(() => {
     let cancelled = false;
@@ -2975,7 +3066,7 @@ function CameraCapture({
       }
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
+          audio: withAudio,
           video: {
             facingMode: { ideal: "environment" },
             width: { ideal: 1280 },
@@ -2996,7 +3087,11 @@ function CameraCapture({
       } catch (e) {
         const name = e instanceof DOMException ? e.name : "";
         if (name === "NotAllowedError" || name === "PermissionDeniedError") {
-          setErr("Permissão da câmera negada. Libere no cadeado da barra de endereço.");
+          setErr(
+            withAudio
+              ? "Permissão de câmera/microfone negada. Libere no cadeado da barra de endereço."
+              : "Permissão da câmera negada. Libere no cadeado da barra de endereço."
+          );
         } else if (name === "NotFoundError") {
           setErr("Nenhuma câmera encontrada neste dispositivo.");
         } else {
@@ -3007,12 +3102,24 @@ function CameraCapture({
     void start();
     return () => {
       cancelled = true;
+      if (timerRef.current) window.clearInterval(timerRef.current);
+      recorderRef.current?.stop();
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     };
-  }, []);
+  }, [withAudio]);
 
-  function snap() {
+  function stopStream() {
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    recorderRef.current = null;
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  }
+
+  function snapPhoto() {
     const video = videoRef.current;
     if (!video || !ready) return;
     const w = video.videoWidth || 1280;
@@ -3026,9 +3133,8 @@ function CameraCapture({
     canvas.toBlob(
       (blob) => {
         if (!blob) return;
-        const file = new File([blob], `camera-${Date.now()}.jpg`, { type: "image/jpeg" });
-        streamRef.current?.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
+        const file = new File([blob], `foto-${Date.now()}.jpg`, { type: "image/jpeg" });
+        stopStream();
         onCapture(file);
       },
       "image/jpeg",
@@ -3036,27 +3142,107 @@ function CameraCapture({
     );
   }
 
+  function startVideoRecording() {
+    const stream = streamRef.current;
+    if (!stream || recording) return;
+    const mime = pickVideoRecorderMime();
+    if (!mime) {
+      setErr("Este navegador não suporta gravação de vídeo.");
+      return;
+    }
+    chunksRef.current = [];
+    const rec = new MediaRecorder(stream, { mimeType: mime });
+    recorderRef.current = rec;
+    rec.ondataavailable = (e) => {
+      if (e.data.size > 0) chunksRef.current.push(e.data);
+    };
+    rec.onstop = () => {
+      if (cancelRef.current) {
+        cancelRef.current = false;
+        setRecording(false);
+        setElapsed(0);
+        return;
+      }
+      const blob = new Blob(chunksRef.current, { type: mime });
+      const ext = extensionForMime(mime);
+      const file = new File([blob], `video-${Date.now()}.${ext}`, { type: mime.split(";")[0] });
+      stopStream();
+      setRecording(false);
+      setElapsed(0);
+      onCapture(file);
+    };
+    rec.start(250);
+    setRecording(true);
+    setElapsed(0);
+    timerRef.current = window.setInterval(() => {
+      setElapsed((s) => s + 1);
+    }, 1000);
+  }
+
+  function handleClose() {
+    cancelRef.current = true;
+    if (recorderRef.current && recorderRef.current.state !== "inactive") {
+      recorderRef.current.stop();
+    }
+    stopStream();
+    onClose();
+  }
+
+  function stopVideoRecording() {
+    if (!recorderRef.current || recorderRef.current.state === "inactive") return;
+    recorderRef.current.stop();
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }
+
+  const title = mode === "photo" ? "Tirar foto" : "Gravar vídeo";
+  const elapsedLabel = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`;
+
   return (
-    <div className="wa-camera-overlay" role="dialog" aria-label="Câmera">
+    <div className="wa-camera-overlay" role="dialog" aria-label={title}>
       <div className="wa-camera-box">
         <header>
-          <strong>Câmera</strong>
-          <button type="button" onClick={onClose}>
+          <strong>{title}</strong>
+          <button type="button" onClick={handleClose}>
             Fechar
           </button>
         </header>
         {err ? (
           <p className="wa-camera-err">{err}</p>
         ) : (
-          <video ref={videoRef} playsInline muted autoPlay />
+          <div className="wa-camera-preview-wrap">
+            <video ref={videoRef} playsInline muted autoPlay />
+            {recording && (
+              <span className="wa-camera-rec-badge" aria-live="polite">
+                REC {elapsedLabel}
+              </span>
+            )}
+          </div>
         )}
         <footer>
-          <button type="button" className="ghost" onClick={onClose}>
+          <button type="button" className="ghost" onClick={handleClose}>
             Cancelar
           </button>
-          <button type="button" className="snap" disabled={!ready || !!err} onClick={snap}>
-            Tirar foto
-          </button>
+          {mode === "photo" ? (
+            <button type="button" className="snap" disabled={!ready || !!err} onClick={snapPhoto}>
+              Capturar
+            </button>
+          ) : recording ? (
+            <button type="button" className="snap rec-stop" disabled={!!err} onClick={stopVideoRecording}>
+              Parar e enviar
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="snap"
+              disabled={!ready || !!err}
+              onClick={startVideoRecording}
+            >
+              Iniciar gravação
+            </button>
+          )}
         </footer>
       </div>
     </div>
