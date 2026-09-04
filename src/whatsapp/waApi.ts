@@ -352,15 +352,19 @@ export const waApi = {
       errors: Array<{ index: number; clientKey?: string; error?: string }>;
     };
   },
-  assign: (contactId: string, userId?: string, queueId?: string) =>
+  assign: (contactId: string, userId?: string, queueId?: string, flow?: "atendimento" | "financeiro") =>
     request<WaContact>("/whatsapp/contacts/assign", {
       method: "POST",
-      body: JSON.stringify({ contactId, userId, queueId }),
+      body: JSON.stringify({ contactId, userId, queueId, flow }),
     }),
-  openToAll: (contactId: string, queueId?: string) =>
+  openToAll: (
+    contactId: string,
+    queueId?: string,
+    flow?: "atendimento" | "financeiro"
+  ) =>
     request<WaContact>("/whatsapp/contacts/open-to-all", {
       method: "POST",
-      body: JSON.stringify({ contactId, queueId }),
+      body: JSON.stringify({ contactId, queueId, flow }),
     }),
   resolve: (contactId: string) =>
     request("/whatsapp/contacts/resolve", {

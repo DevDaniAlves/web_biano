@@ -1551,9 +1551,8 @@ function Inbox() {
   }, []);
 
   useEffect(() => {
-    if (!seeAll) return;
     waApi.users().then(setSellers).catch(() => {});
-  }, [seeAll]);
+  }, []);
 
   useEffect(() => {
     refreshContacts().catch((e) => setError(String(e.message)));
@@ -2260,10 +2259,29 @@ function Inbox() {
     setBusy(true);
     setError("");
     try {
-      const contact =
-        assumeTarget === "__open__"
-          ? await waApi.openToAll(selectedId)
-          : await waApi.assign(selectedId, assumeTarget);
+      let contact: WaContact;
+      if (assumeTarget === "__open_atendimento__") {
+        contact = await waApi.openToAll(selectedId, undefined, "atendimento");
+      } else if (assumeTarget === "__open_financeiro__") {
+        contact = await waApi.openToAll(selectedId, undefined, "financeiro");
+      } else if (assumeTarget === "__open__") {
+        contact = await waApi.openToAll(
+          selectedId,
+          undefined,
+          selected?.botFlow === "financeiro" ? "financeiro" : "atendimento"
+        );
+      } else {
+        const target = sellers.find((s) => s.id === assumeTarget);
+        const flow: "atendimento" | "financeiro" | undefined =
+          target?.flowFinanceiro && !target?.flowAtendimento
+            ? "financeiro"
+            : target?.flowAtendimento && !target?.flowFinanceiro
+              ? "atendimento"
+              : selected?.botFlow === "financeiro"
+                ? "financeiro"
+                : "atendimento";
+        contact = await waApi.assign(selectedId, assumeTarget, undefined, flow);
+      }
       setSelectedFlags(contact);
       setAssumeOpen(false);
       await refreshContacts();
@@ -2553,7 +2571,8 @@ function Inbox() {
                 )}
               </div>
               <div className="wa-actions">
-                {seeAll &&
+                {(seeAll ||
+                  (selected.assignedTo?.id === user?.id && flags?.status === "human")) &&
                   flags?.status !== "closed" &&
                   flags?.status !== "awaiting_rating" &&
                   (assumeOpen ? (
@@ -2564,10 +2583,11 @@ function Inbox() {
                         aria-label="Mover atendimento"
                         disabled={busy}
                       >
-                        <option value="__open__">
-                          {selected.botFlow === "financeiro"
-                            ? "Disponível p/ equipe financeira"
-                            : "Disponível p/ equipe (primeiro responde)"}
+                        <option value="__open_atendimento__">
+                          Disponível p/ equipe Atendimento
+                        </option>
+                        <option value="__open_financeiro__">
+                          Disponível p/ equipe Financeiro
                         </option>
                         {user && (
                           <option value={user.id}>Eu — {user.name}</option>
@@ -2578,6 +2598,11 @@ function Inbox() {
                             <option key={s.id} value={s.id}>
                               {s.name}
                               {s.role === "admin" ? " (admin)" : ""}
+                              {s.flowFinanceiro && !s.flowAtendimento
+                                ? " · Fin"
+                                : s.flowAtendimento && !s.flowFinanceiro
+                                  ? " · Atend"
+                                  : ""}
                             </option>
                           ))}
                       </select>
@@ -2602,7 +2627,11 @@ function Inbox() {
                       type="button"
                       disabled={busy}
                       onClick={() => {
-                        setAssumeTarget(user?.id ?? "");
+                        setAssumeTarget(
+                          selected.botFlow === "financeiro"
+                            ? "__open_financeiro__"
+                            : "__open_atendimento__"
+                        );
                         setAssumeOpen(true);
                         if (sellers.length === 0) {
                           waApi.users().then(setSellers).catch(() => {});
