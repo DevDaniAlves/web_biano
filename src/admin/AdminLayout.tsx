@@ -20,6 +20,7 @@ const MENU = [
   },
   { to: "/admin/catalogo", label: "Catálogo" },
   { to: "/admin/galeria", label: "Galeria" },
+  { to: "/admin/feriados", label: "Feriados" },
   { to: "/admin/gestor", label: "Gestor" },
 ];
 

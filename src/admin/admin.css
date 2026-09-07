@@ -524,6 +524,36 @@
   font-size: 0.88rem;
 }
 
+.admin-ok {
+  color: var(--ok, #3d9a6a);
+  margin: 0 0 0.65rem;
+  font-size: 0.88rem;
+}
+
+.admin-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.admin-toolbar label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--muted, #888);
+}
+
+.admin-toolbar label.admin-check {
+  flex-direction: row;
+  align-items: center;
+  color: var(--white);
+  margin-top: 1.1rem;
+}
+
 @media (max-width: 860px) {
   .admin-shell {
     display: flex;

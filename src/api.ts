@@ -68,6 +68,16 @@ export interface GestorAutomation {
   timezone: string;
 }
 
+export interface BusinessClosure {
+  id: string;
+  dateYmd: string;
+  label: string | null;
+  blockAttendance: boolean;
+  blockBoleto: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const api = {
   health: () => request<{ ok: boolean }>("/health"),
   stats: () => request<Stats>("/boletos/stats?hoje=true"),
@@ -110,6 +120,27 @@ export const api = {
       "/gestor/automation/run-now",
       { method: "POST" }
     ),
+  listClosures: () => request<BusinessClosure[]>("/closures"),
+  createClosure: (body: {
+    dateYmd: string;
+    label?: string | null;
+    blockAttendance?: boolean;
+    blockBoleto?: boolean;
+  }) =>
+    request<BusinessClosure>("/closures", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateClosure: (
+    id: string,
+    body: Partial<{ label: string | null; blockAttendance: boolean; blockBoleto: boolean }>
+  ) =>
+    request<BusinessClosure>(`/closures/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteClosure: (id: string) =>
+    request<{ ok: boolean }>(`/closures/${id}`, { method: "DELETE" }),
   importCsv: async (file: File) => {
     const form = new FormData();
     form.append("file", file);
