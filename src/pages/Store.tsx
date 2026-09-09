@@ -12,17 +12,10 @@ function waMeLink(phone: string, text: string) {
   return `https://wa.me/${digits}?text=${encodeURIComponent(text.trim())}`;
 }
 
-function sellerMessage(keyword: string, productName?: string) {
-  if (productName) {
-    return [
-      `Olá! Vi o item *${productName}* no catálogo da Calangus Moda Jovem e gostaria de falar com um vendedor.`,
-      "",
-      keyword,
-    ].join("\n");
-  }
+function sellerMessage(keyword: string) {
   return [
-    "Olá! Vim pelo catálogo da Calangus Moda Jovem e gostaria de falar com um vendedor.",
-    "Pode me ajudar a escolher uma peça?",
+    "Olá! Vim pela Calangus Moda Jovem e quero ver as peças.",
+    "Pode me atender?",
     "",
     keyword,
   ].join("\n");
@@ -84,17 +77,22 @@ export function Store() {
         <Header minimal />
         <main className="construction-page">
           <img className="construction-logo" src="/brand/logo-wordmark.png" alt="Calangus Moda Jovem" />
-          <h1>A Calangus esta em movimento</h1>
-          <p>Estamos preparando uma experiencia ainda mais forte para apresentar a marca.</p>
+          <p className="hero-kicker">Moda masculina • Acessórios • Perfumes</p>
+          <h1>Chama no Whats e garante o seu look</h1>
+          <p>Atendimento de 08h às 18h. Parcelamos em até 10x sem juros.</p>
           <div className="hero-ctas">
-            <a className="hero-cta" href={CATALOG_URL} target="_blank" rel="noreferrer">
-              Acessar catalogo
-            </a>
-            {generalWa && (
-              <a className="hero-cta ghost" href={generalWa} target="_blank" rel="noreferrer">
-                Fale conosco
+            {generalWa ? (
+              <a className="hero-cta" href={generalWa} target="_blank" rel="noreferrer">
+                Chama no Whats
+              </a>
+            ) : (
+              <a className="hero-cta" href={CATALOG_URL} target="_blank" rel="noreferrer">
+                Ver catálogo
               </a>
             )}
+            <a className="hero-cta ghost" href={CATALOG_URL} target="_blank" rel="noreferrer">
+              Ver catálogo
+            </a>
           </div>
         </main>
       </div>
@@ -113,65 +111,75 @@ export function Store() {
             src="/brand/logo-wordmark.png"
             alt="Calangus Moda Jovem"
           />
-          <p className="hero-kicker">Moda jovem com atitude urbana</p>
-          <h1>Uma marca feita para vestir presenca, movimento e identidade.</h1>
+          <p className="hero-kicker">Moda masculina • Acessórios • Perfumes</p>
+          <h1>Estilo que acompanha seu passo.</h1>
           <p>
-            A Calangus combina energia de rua, visual marcante e pecas pensadas para quem quer se
-            destacar no dia a dia. Conheca nossa marca e acesse o novo catalogo oficial.
+            Camisetas, óculos, calçados e perfumes para o homem que quer marcar presença no dia a
+            dia, no rolê e na pista. Escolhe o look, chama no Whats e fecha com a gente.
           </p>
           <div className="hero-ctas">
             <a className="hero-cta" href={CATALOG_URL} target="_blank" rel="noreferrer">
-              Ver catalogo
+              Ver catálogo
             </a>
             {generalWa && (
               <a className="hero-cta ghost" href={generalWa} target="_blank" rel="noreferrer">
-                Fale conosco
+                Chama no Whats
               </a>
             )}
           </div>
-          <ul className="hero-points">
-            <li>Estilo urbano com assinatura propria</li>
-            <li>Looks para rotina, rolê e presenca digital</li>
-            <li>Atendimento rapido pelo WhatsApp</li>
+          <ul className="hero-offers">
+            <li>
+              <span>⏱️</span> Atendimento: 08h às 18h
+            </li>
+            <li>
+              <span>💳</span> Parcelamos em até 10x sem juros
+            </li>
+            <li>
+              <span>📲</span> Chama no Whats e garante o seu
+            </li>
           </ul>
         </div>
         <div className="store-hero-product">
           <div className="hero-showcase">
             <div className="hero-showcase-card">
-              <span className="hero-chip">Colecao em destaque</span>
-              <strong>Essenciais com atitude</strong>
-              <p>Visual preto, acentos vermelhos e uma linguagem jovem para marcar a vitrine.</p>
+              <span className="hero-chip">Em alta na loja</span>
+              <strong>Calçados com até 30% OFF</strong>
+              <p>Conforto que te move — e preço pra fechar agora.</p>
             </div>
             <img src="/brand/hero-product.png" alt="" />
           </div>
         </div>
       </section>
 
-      <section id="diferenciais" className="brand-section brand-story">
+      <section id="colecao" className="brand-section brand-story">
         <div className="section-heading">
-          <p className="section-kicker">A marca</p>
-          <h2>Mais do que vender roupa, a Calangus apresenta uma identidade.</h2>
+          <p className="section-kicker">O que você encontra</p>
+          <h2>Moda masculina completa pra vestir do básico ao street.</h2>
+          <p>Peças pra rotina, acessórios pra fechar o look e perfumes pra completar o estilo.</p>
         </div>
         <div className="story-grid">
           <article className="story-card">
-            <h3>Estetica com energia</h3>
+            <p className="story-tag">Moda masculina</p>
+            <h3>Camisetas e essentials</h3>
             <p>
-              Nossa comunicacao mistura contraste forte, textura, tons quentes e uma presenca que
-              conversa com a rua e com o digital.
+              Básicas justas, oversize com pegada e estampas que falam por você — do dia a dia até o
+              visual moto e street.
             </p>
           </article>
           <article className="story-card">
-            <h3>Pecas para viver o dia</h3>
+            <p className="story-tag">Acessórios</p>
+            <h3>Óculos e calçados</h3>
             <p>
-              A curadoria busca equilibrio entre conforto, visual marcante e versatilidade para
-              diferentes momentos da rotina.
+              Óculos com cara de vitrine e calçados pra acompanhar o ritmo. Detalhe certo muda o
+              look inteiro.
             </p>
           </article>
           <article className="story-card">
-            <h3>Atendimento proximo</h3>
+            <p className="story-tag">Perfumes</p>
+            <h3>Fragrâncias pra marcar presença</h3>
             <p>
-              Quando quiser ajuda para escolher, combinar ou tirar duvidas, nosso time atende voce
-              pelo WhatsApp.
+              Do clássico ao marcante: escolha o perfume que combina com o seu estilo e leve o look
+              completo.
             </p>
           </article>
         </div>
@@ -179,45 +187,47 @@ export function Store() {
 
       <section className="brand-section brand-banner">
         <div className="brand-banner-copy">
-          <p className="section-kicker">Novo destino digital</p>
-          <h2>O catalogo agora segue para uma experiencia dedicada da marca.</h2>
+          <p className="section-kicker">Fechou fácil</p>
+          <h2>Viu, gostou, chama no Whats.</h2>
           <p>
-            Em vez da vitrine dentro desta pagina, o acesso principal vai direto para o novo site
-            da Calangus, com foco total na apresentacao da colecao.
+            Atendimento de 08h às 18h. Parcelamos em até 10x sem juros. Nossa equipe te ajuda a
+            escolher tamanho, modelo e o melhor combo pra você.
           </p>
         </div>
         <div className="brand-banner-actions">
-          <a className="hero-cta" href={CATALOG_URL} target="_blank" rel="noreferrer">
-            Ir para www.calangus.com.br
-          </a>
           {generalWa && (
-            <a className="hero-cta ghost" href={generalWa} target="_blank" rel="noreferrer">
-              Falar no WhatsApp
+            <a className="hero-cta" href={generalWa} target="_blank" rel="noreferrer">
+              Chama no Whats
             </a>
           )}
+          <a className={`hero-cta${generalWa ? " ghost" : ""}`} href={CATALOG_URL} target="_blank" rel="noreferrer">
+            Ver catálogo
+          </a>
         </div>
       </section>
 
       <section id="contato" className="contact-section">
         <div className="section-heading">
-          <p className="section-kicker">Fale conosco</p>
-          <h2>Quer ajuda para escolher uma peca ou conhecer melhor a marca?</h2>
+          <p className="section-kicker">Atendimento</p>
+          <h2>Chama no Whats 👇🏻</h2>
           <p>
             {mode === "wa_me"
-              ? "Abra o WhatsApp e fale com a equipe Calangus."
-              : "Deixe seus dados e nossa equipe entra em contato com voce."}
+              ? "Fala com a equipe Calangus e garante sua peça."
+              : "Deixa seus dados que a gente te chama no WhatsApp."}
           </p>
         </div>
         {mode === "wa_me" ? (
           generalWa ? (
             <a className="hero-cta" href={generalWa} target="_blank" rel="noreferrer">
-              Fale conosco
+              Chama no Whats
             </a>
           ) : (
-            <p>Configure WHATSAPP_BUSINESS_PHONE no servidor.</p>
+            <a className="hero-cta" href={CATALOG_URL} target="_blank" rel="noreferrer">
+              Ver catálogo
+            </a>
           )
         ) : sent ? (
-          <p className="contact-ok">Recebemos seu pedido! Em breve um vendedor entra em contato.</p>
+          <p className="contact-ok">Recebemos! Em breve um vendedor te chama.</p>
         ) : (
           <form className="contact-form" onSubmit={(e) => void onLead(e)}>
             <input
@@ -235,12 +245,12 @@ export function Store() {
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Mensagem (opcional)"
+              placeholder="O que você está buscando? (opcional)"
               rows={3}
             />
             {error && <p className="contact-error">{error}</p>}
             <button type="submit" disabled={busy}>
-              {busy ? "Enviando…" : "Solicitar atendimento"}
+              {busy ? "Enviando…" : "Quero atendimento"}
             </button>
           </form>
         )}
@@ -248,7 +258,7 @@ export function Store() {
 
       <footer className="store-footer">
         <img src="/brand/logo-circle.png" alt="" width={36} height={36} />
-        <span>Calangus Moda Jovem</span>
+        <span>Calangus Moda Jovem · Moda masculina • Acessórios • Perfumes</span>
       </footer>
     </div>
   );

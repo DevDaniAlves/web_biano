@@ -318,29 +318,34 @@
   gap: 0.75rem;
 }
 
-.hero-points {
+.hero-offers {
   display: grid;
-  gap: 0.6rem;
-  margin: 1.2rem 0 0;
+  gap: 0.55rem;
+  margin: 1.25rem 0 0;
   padding: 0;
   list-style: none;
 }
 
-.hero-points li {
-  position: relative;
-  padding-left: 1rem;
+.hero-offers li {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
   color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 600;
 }
 
-.hero-points li::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0.65rem;
-  width: 0.42rem;
-  height: 0.42rem;
-  border-radius: 999px;
-  background: var(--red);
+.hero-offers li span {
+  flex-shrink: 0;
+}
+
+.story-tag {
+  margin: 0 0 0.45rem;
+  color: var(--red);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .contact-section {
