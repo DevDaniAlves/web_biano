@@ -121,7 +121,7 @@ export function Store() {
           </p>
           <div className="hero-ctas">
             <a className="hero-cta" href={CATALOG_URL} target="_blank" rel="noreferrer">
-              Ver catalogo oficial
+              Ver catalogo
             </a>
             {generalWa && (
               <a className="hero-cta ghost" href={generalWa} target="_blank" rel="noreferrer">
