@@ -702,11 +702,21 @@ export const waApi = {
       }),
     });
   },
-  sendProductOutreach: async (contactId: string, productName: string, file: File) => {
+  sendProductOutreach: async (opts: {
+    contactId?: string;
+    phone?: string;
+    clientName?: string;
+    templateName?: string;
+    productName?: string;
+    file?: File | null;
+  }) => {
     const form = new FormData();
-    form.append("contactId", contactId);
-    form.append("productName", productName);
-    form.append("file", file);
+    if (opts.contactId) form.append("contactId", opts.contactId);
+    if (opts.phone) form.append("phone", opts.phone);
+    if (opts.clientName) form.append("clientName", opts.clientName);
+    if (opts.templateName) form.append("templateName", opts.templateName);
+    if (opts.productName) form.append("productName", opts.productName);
+    if (opts.file) form.append("file", opts.file);
     const res = await fetch(`${API}/whatsapp/messages/product-outreach`, {
       method: "POST",
       headers: authHeaders(),
@@ -718,7 +728,7 @@ export const waApi = {
       throw new Error("Sessão expirada — faça login novamente");
     }
     if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
-    return data as WaMessage;
+    return data as WaMessage & { contactId: string };
   },
   deleteMetaTemplate: (name: string) =>
     request<{ ok: boolean }>("/whatsapp/meta/templates/" + encodeURIComponent(name), {

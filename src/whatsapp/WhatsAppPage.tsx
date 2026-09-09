@@ -1440,6 +1440,13 @@ function Inbox() {
   const [assumeTarget, setAssumeTarget] = useState("");
   const [outreachOpen, setOutreachOpen] = useState(false);
   const [outreachContactId, setOutreachContactId] = useState("");
+  const [outreachQuery, setOutreachQuery] = useState("");
+  const [outreachPhone, setOutreachPhone] = useState("");
+  const [outreachClientName, setOutreachClientName] = useState("");
+  const [outreachTemplate, setOutreachTemplate] = useState<
+    "continuidade_pedido" | "retomada_atendimento" | "abordagem_novidades" | "produto_disponivel"
+  >("continuidade_pedido");
+  const [outreachSuggestOpen, setOutreachSuggestOpen] = useState(false);
   const [outreachProduct, setOutreachProduct] = useState("");
   const [outreachFile, setOutreachFile] = useState<File | null>(null);
   const [outreachPreview, setOutreachPreview] = useState<string | null>(null);
@@ -2350,26 +2357,69 @@ function Inbox() {
     setOutreachFile(null);
     if (outreachPreview) URL.revokeObjectURL(outreachPreview);
     setOutreachPreview(null);
-    setOutreachContactId(selectedId || contacts[0]?.id || "");
+    setOutreachTemplate("continuidade_pedido");
+    setOutreachClientName("");
+    setOutreachSuggestOpen(false);
+    const seed = selected ?? contacts[0] ?? null;
+    if (seed) {
+      setOutreachContactId(seed.id);
+      setOutreachQuery(`${seed.name || seed.phone} · ${seed.phone}`);
+      setOutreachPhone(seed.phone.replace(/\D/g, ""));
+    } else {
+      setOutreachContactId("");
+      setOutreachQuery("");
+      setOutreachPhone("");
+    }
     setOutreachOpen(true);
+  }
+
+  function pickOutreachContact(c: WaContact) {
+    setOutreachContactId(c.id);
+    setOutreachQuery(`${c.name || c.phone} · ${c.phone}`);
+    setOutreachPhone(c.phone.replace(/\D/g, ""));
+    if (!outreachClientName.trim() && c.name && c.name !== c.phone) {
+      setOutreachClientName(c.name);
+    }
+    setOutreachSuggestOpen(false);
+  }
+
+  function onOutreachQueryChange(value: string) {
+    setOutreachQuery(value);
+    setOutreachContactId("");
+    const digits = value.replace(/\D/g, "");
+    setOutreachPhone(digits);
+    setOutreachSuggestOpen(true);
   }
 
   async function submitOutreach(e: FormEvent) {
     e.preventDefault();
-    if (!outreachContactId || !outreachProduct.trim() || !outreachFile) {
-      setError("Selecione o cliente, informe o produto e envie a foto");
+    const needsProduct = outreachTemplate === "produto_disponivel";
+    const phoneDigits = outreachPhone.replace(/\D/g, "");
+    if (!outreachContactId && phoneDigits.length < 10) {
+      setError("Selecione um cliente ou digite o WhatsApp com DDD");
+      return;
+    }
+    if (needsProduct && (!outreachProduct.trim() || !outreachFile)) {
+      setError("Para produto disponível, informe o nome e envie a foto");
       return;
     }
     setBusy(true);
     setError("");
     try {
-      await waApi.sendProductOutreach(outreachContactId, outreachProduct.trim(), outreachFile);
+      const msg = await waApi.sendProductOutreach({
+        contactId: outreachContactId || undefined,
+        phone: outreachContactId ? undefined : phoneDigits,
+        clientName: outreachClientName.trim() || undefined,
+        templateName: outreachTemplate,
+        productName: needsProduct ? outreachProduct.trim() : undefined,
+        file: needsProduct ? outreachFile : null,
+      });
       setOutreachOpen(false);
       setOutreachProduct("");
       setOutreachFile(null);
       if (outreachPreview) URL.revokeObjectURL(outreachPreview);
       setOutreachPreview(null);
-      await openContact(outreachContactId);
+      await openContact(msg.contactId);
       await refreshContacts();
     } catch (err) {
       setError(String((err as Error).message));
@@ -2386,6 +2436,24 @@ function Inbox() {
     return [...map.values()];
   }, [contacts, selected]);
 
+  const outreachSuggestions = useMemo(() => {
+    const q = outreachQuery.trim().toLowerCase();
+    const digits = outreachQuery.replace(/\D/g, "");
+    const list = !q
+      ? outreachOptions
+      : outreachOptions.filter((c) => {
+          const name = (c.name || "").toLowerCase();
+          const phone = c.phone.replace(/\D/g, "");
+          return name.includes(q) || phone.includes(digits) || c.phone.toLowerCase().includes(q);
+        });
+    return list.slice(0, 8);
+  }, [outreachOptions, outreachQuery]);
+
+  const outreachNeedsProduct = outreachTemplate === "produto_disponivel";
+  const outreachCanSubmit =
+    Boolean(outreachContactId || outreachPhone.replace(/\D/g, "").length >= 10) &&
+    (!outreachNeedsProduct || (Boolean(outreachProduct.trim()) && Boolean(outreachFile)));
+
   return (
     <div className={`wa-inbox${selectedId ? " has-chat" : ""}`}>
       <aside className="wa-list">
@@ -2394,7 +2462,7 @@ function Inbox() {
           <button
             type="button"
             className="wa-outreach-btn"
-            disabled={busy || (contacts.length === 0 && !selectedId)}
+            disabled={busy}
             onClick={() => openOutreach()}
           >
             Entrar em contato
@@ -2993,64 +3061,169 @@ function Inbox() {
           onClick={() => !busy && setOutreachOpen(false)}
         >
           <form
-            className="wa-outreach-modal"
+            className="wa-outreach-modal wa-outreach-modal--wide"
             onClick={(e) => e.stopPropagation()}
             onSubmit={(e) => void submitOutreach(e)}
           >
             <h3>Entrar em contato</h3>
             <p className="wa-outreach-hint">
-              Envia o template com a foto do produto e o nome. O cliente precisa ter o template{" "}
-              <code>produto_disponivel</code> aprovado na Meta.
+              Busque um cliente que já conversou, ou digite um WhatsApp novo. Em seguida escolha o
+              template. O destaque fica em <strong>Continuidade do pedido</strong>.
             </p>
             {error && <p className="wa-error">{error}</p>}
+
+            <div className="wa-outreach-field">
+              <span className="wa-outreach-label">Cliente ou WhatsApp</span>
+              <div className="wa-outreach-combobox">
+                <input
+                  value={outreachQuery}
+                  onChange={(e) => onOutreachQueryChange(e.target.value)}
+                  onFocus={() => setOutreachSuggestOpen(true)}
+                  onBlur={() => window.setTimeout(() => setOutreachSuggestOpen(false), 120)}
+                  placeholder="Buscar nome / digitar número com DDD"
+                  autoComplete="off"
+                  aria-autocomplete="list"
+                  aria-expanded={outreachSuggestOpen}
+                />
+                {outreachSuggestOpen && (
+                  <div className="wa-outreach-suggest" role="listbox">
+                    {outreachSuggestions.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className="wa-outreach-suggest-item"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => pickOutreachContact(c)}
+                      >
+                        <strong>{c.name || c.phone}</strong>
+                        <span>{c.phone}</span>
+                      </button>
+                    ))}
+                    {outreachSuggestions.length === 0 && (
+                      <p className="wa-outreach-suggest-empty">
+                        Nenhum contato encontrado. Continue digitando o número para usar um WhatsApp novo.
+                      </p>
+                    )}
+                    {outreachPhone.replace(/\D/g, "").length >= 10 && !outreachContactId && (
+                      <button
+                        type="button"
+                        className="wa-outreach-suggest-item wa-outreach-suggest-new"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setOutreachQuery(outreachPhone.replace(/\D/g, ""));
+                          setOutreachSuggestOpen(false);
+                        }}
+                      >
+                        <strong>Usar número novo</strong>
+                        <span>{outreachPhone.replace(/\D/g, "")}</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+              <p className="wa-outreach-meta">
+                {outreachContactId
+                  ? "Contato selecionado da lista"
+                  : outreachPhone.replace(/\D/g, "").length >= 10
+                    ? `Número manual: ${outreachPhone.replace(/\D/g, "")}`
+                    : "Selecione na lista ou digite o número completo"}
+              </p>
+            </div>
+
             <label>
-              Cliente
-              <select
-                value={outreachContactId}
-                onChange={(e) => setOutreachContactId(e.target.value)}
-                required
-              >
-                <option value="">Selecione…</option>
-                {outreachOptions.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name || c.phone} · {c.phone}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Nome do produto
+              Nome para o template (opcional)
               <input
-                value={outreachProduct}
-                onChange={(e) => setOutreachProduct(e.target.value)}
-                placeholder="Ex.: Vestido Floral M"
-                required
+                value={outreachClientName}
+                onChange={(e) => setOutreachClientName(e.target.value)}
+                placeholder="Ex.: Pamela"
                 maxLength={60}
               />
             </label>
-            <label>
-              Foto do produto
-              <input
-                type="file"
-                accept="image/*"
-                required={!outreachFile}
-                onChange={(e) => {
-                  const f = e.target.files?.[0] ?? null;
-                  if (outreachPreview) URL.revokeObjectURL(outreachPreview);
-                  setOutreachFile(f);
-                  setOutreachPreview(f ? URL.createObjectURL(f) : null);
-                }}
-              />
-            </label>
-            {outreachPreview && (
-              <img src={outreachPreview} alt="Prévia" className="wa-outreach-preview" />
+
+            <div className="wa-outreach-field">
+              <span className="wa-outreach-label">Template</span>
+              <div className="wa-outreach-templates" role="radiogroup" aria-label="Templates">
+                {(
+                  [
+                    {
+                      id: "continuidade_pedido" as const,
+                      title: "Continuidade do pedido",
+                      desc: "Referente ao pedido · Utilidade",
+                      featured: true,
+                    },
+                    {
+                      id: "retomada_atendimento" as const,
+                      title: "Retomada de atendimento",
+                      desc: "Retomar conversa · Marketing",
+                    },
+                    {
+                      id: "abordagem_novidades" as const,
+                      title: "Abordagem de novidades",
+                      desc: "Apresentar novidades · Marketing",
+                    },
+                    {
+                      id: "produto_disponivel" as const,
+                      title: "Produto disponível",
+                      desc: "Foto + nome do produto · Marketing",
+                    },
+                  ] as const
+                ).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={outreachTemplate === t.id}
+                    className={`wa-outreach-tpl${outreachTemplate === t.id ? " is-active" : ""}${
+                      "featured" in t && t.featured ? " is-featured" : ""
+                    }`}
+                    onClick={() => setOutreachTemplate(t.id)}
+                  >
+                    {"featured" in t && t.featured ? <span className="wa-outreach-tpl-badge">Destaque</span> : null}
+                    <strong>{t.title}</strong>
+                    <span>{t.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {outreachNeedsProduct && (
+              <>
+                <label>
+                  Nome do produto
+                  <input
+                    value={outreachProduct}
+                    onChange={(e) => setOutreachProduct(e.target.value)}
+                    placeholder="Ex.: Vestido Floral M"
+                    required
+                    maxLength={60}
+                  />
+                </label>
+                <label>
+                  Foto do produto
+                  <input
+                    type="file"
+                    accept="image/*"
+                    required={!outreachFile}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] ?? null;
+                      if (outreachPreview) URL.revokeObjectURL(outreachPreview);
+                      setOutreachFile(f);
+                      setOutreachPreview(f ? URL.createObjectURL(f) : null);
+                    }}
+                  />
+                </label>
+                {outreachPreview && (
+                  <img src={outreachPreview} alt="Prévia" className="wa-outreach-preview" />
+                )}
+              </>
             )}
+
             <div className="wa-outreach-actions">
               <button type="button" className="ghost" disabled={busy} onClick={() => setOutreachOpen(false)}>
                 Cancelar
               </button>
-              <button type="submit" disabled={busy || !outreachContactId || !outreachProduct.trim() || !outreachFile}>
-                {busy ? "Enviando…" : "Enviar"}
+              <button type="submit" disabled={busy || !outreachCanSubmit}>
+                {busy ? "Enviando…" : "Enviar template"}
               </button>
             </div>
           </form>
