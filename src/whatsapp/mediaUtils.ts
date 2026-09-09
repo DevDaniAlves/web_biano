@@ -61,10 +61,10 @@ export function validateMediaFile(file: File): string | null {
 
 export function pickVideoRecorderMime(): string {
   const candidates = [
+    "video/mp4",
     "video/webm;codecs=vp9,opus",
     "video/webm;codecs=vp8,opus",
     "video/webm",
-    "video/mp4",
   ];
   if (typeof MediaRecorder === "undefined") return "";
   return candidates.find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
