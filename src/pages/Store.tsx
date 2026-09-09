@@ -1,10 +1,11 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { homePathForSession, isStandaloneDisplay } from "../auth";
 import { Header } from "../components/Header";
-import { ProductCard } from "../components/ProductCard";
-import { waApi, type CatalogProduct } from "../whatsapp/waApi";
+import { waApi } from "../whatsapp/waApi";
 import "./store.css";
+
+const CATALOG_URL = "https://www.calangus.com.br";
 
 function waMeLink(phone: string, text: string) {
   const digits = phone.replace(/\D/g, "");
@@ -27,20 +28,7 @@ function sellerMessage(keyword: string, productName?: string) {
   ].join("\n");
 }
 
-function storeMediaSrc(url: string) {
-  if (!url) return "";
-  if (/^https?:\/\//i.test(url) || url.startsWith("blob:")) return url;
-  const base = import.meta.env.VITE_API_URL ?? "";
-  const path = url.startsWith("/") ? url : `/${url}`;
-  if (base && !base.startsWith("/")) return `${base.replace(/\/$/, "")}${path}`;
-  return path;
-}
-
 export function Store() {
-  const [products, setProducts] = useState<CatalogProduct[]>([]);
-  const [gallery, setGallery] = useState<Array<{ id: string; imageUrl: string; caption: string | null }>>(
-    []
-  );
   const [mode, setMode] = useState<"wa_me" | "form">("wa_me");
   const [waPhone, setWaPhone] = useState<string | null>(null);
   const [keyword, setKeyword] = useState("catalogo");
@@ -52,8 +40,6 @@ export function Store() {
   const [busy, setBusy] = useState(false);
   const [underConstruction, setUnderConstruction] = useState(false);
 
-  const [galleryOpen, setGalleryOpen] = useState<string | null>(null);
-
   useEffect(() => {
     waApi
       .catalogConfig()
@@ -62,19 +48,14 @@ export function Store() {
         setWaPhone(c.phone);
         if (c.keyword) setKeyword(c.keyword);
         setUnderConstruction(Boolean(c.underConstruction));
-        if (c.underConstruction) {
-          setProducts([]);
-          setGallery([]);
-          return;
-        }
-        waApi.catalogProducts().then(setProducts).catch(() => {});
-        waApi.catalogGallery().then(setGallery).catch(() => {});
       })
       .catch(() => {});
   }, []);
 
-  const generalWa =
-    waPhone && mode === "wa_me" ? waMeLink(waPhone, sellerMessage(keyword)) : null;
+  const generalWa = useMemo(
+    () => (waPhone && mode === "wa_me" ? waMeLink(waPhone, sellerMessage(keyword)) : null),
+    [keyword, mode, waPhone]
+  );
 
   async function onLead(e: FormEvent) {
     e.preventDefault();
@@ -103,13 +84,18 @@ export function Store() {
         <Header minimal />
         <main className="construction-page">
           <img className="construction-logo" src="/brand/logo-wordmark.png" alt="Calangus Moda Jovem" />
-          <h1>Em construção</h1>
-          <p>Estamos preparando novidades no catálogo. Volte em breve!</p>
-          {generalWa && (
-            <a className="hero-cta" href={generalWa} target="_blank" rel="noreferrer">
-              Falar no WhatsApp
+          <h1>A Calangus esta em movimento</h1>
+          <p>Estamos preparando uma experiencia ainda mais forte para apresentar a marca.</p>
+          <div className="hero-ctas">
+            <a className="hero-cta" href={CATALOG_URL} target="_blank" rel="noreferrer">
+              Acessar catalogo
             </a>
-          )}
+            {generalWa && (
+              <a className="hero-cta ghost" href={generalWa} target="_blank" rel="noreferrer">
+                Fale conosco
+              </a>
+            )}
+          </div>
         </main>
       </div>
     );
@@ -119,7 +105,7 @@ export function Store() {
     <div className="store">
       <Header />
 
-      <section className="store-hero">
+      <section id="marca" className="store-hero">
         <div className="store-hero-bg" aria-hidden />
         <div className="store-hero-inner">
           <img
@@ -127,92 +113,105 @@ export function Store() {
             src="/brand/logo-wordmark.png"
             alt="Calangus Moda Jovem"
           />
-          <h1>Estilo que acompanha seu passo.</h1>
-          <p>Conforto que te move todo dia. Preto, madeira e a marca vermelha da rua.</p>
+          <p className="hero-kicker">Moda jovem com atitude urbana</p>
+          <h1>Uma marca feita para vestir presenca, movimento e identidade.</h1>
+          <p>
+            A Calangus combina energia de rua, visual marcante e pecas pensadas para quem quer se
+            destacar no dia a dia. Conheca nossa marca e acesse o novo catalogo oficial.
+          </p>
           <div className="hero-ctas">
-            <a className="hero-cta" href="#catalogo">
-              Ver catálogo
+            <a className="hero-cta" href={CATALOG_URL} target="_blank" rel="noreferrer">
+              Ver catalogo oficial
             </a>
-            <a className="hero-cta ghost" href="#contato">
-              Entrar em contato
-            </a>
+            {generalWa && (
+              <a className="hero-cta ghost" href={generalWa} target="_blank" rel="noreferrer">
+                Fale conosco
+              </a>
+            )}
           </div>
+          <ul className="hero-points">
+            <li>Estilo urbano com assinatura propria</li>
+            <li>Looks para rotina, rolê e presenca digital</li>
+            <li>Atendimento rapido pelo WhatsApp</li>
+          </ul>
         </div>
         <div className="store-hero-product">
-          <img src="/brand/hero-product.png" alt="" />
+          <div className="hero-showcase">
+            <div className="hero-showcase-card">
+              <span className="hero-chip">Colecao em destaque</span>
+              <strong>Essenciais com atitude</strong>
+              <p>Visual preto, acentos vermelhos e uma linguagem jovem para marcar a vitrine.</p>
+            </div>
+            <img src="/brand/hero-product.png" alt="" />
+          </div>
         </div>
       </section>
 
-      <section id="catalogo" className="catalog">
-        <div className="catalog-head">
-          <h2>Catálogo</h2>
-          <p>Peças selecionadas da Calangus Moda Jovem.</p>
+      <section id="diferenciais" className="brand-section brand-story">
+        <div className="section-heading">
+          <p className="section-kicker">A marca</p>
+          <h2>Mais do que vender roupa, a Calangus apresenta uma identidade.</h2>
         </div>
-        <div className="catalog-grid">
-          {products.map((p, i) => (
-            <ProductCard
-              key={p.id}
-              product={p}
-              mediaSrc={storeMediaSrc}
-              sellerHref={
-                waPhone && mode === "wa_me"
-                  ? waMeLink(waPhone, sellerMessage(keyword, p.name))
-                  : null
-              }
-              style={{ animationDelay: `${0.04 * i}s` }}
-            />
-          ))}
-          {products.length === 0 && (
-            <p className="catalog-empty">Nenhum item publicado ainda.</p>
+        <div className="story-grid">
+          <article className="story-card">
+            <h3>Estetica com energia</h3>
+            <p>
+              Nossa comunicacao mistura contraste forte, textura, tons quentes e uma presenca que
+              conversa com a rua e com o digital.
+            </p>
+          </article>
+          <article className="story-card">
+            <h3>Pecas para viver o dia</h3>
+            <p>
+              A curadoria busca equilibrio entre conforto, visual marcante e versatilidade para
+              diferentes momentos da rotina.
+            </p>
+          </article>
+          <article className="story-card">
+            <h3>Atendimento proximo</h3>
+            <p>
+              Quando quiser ajuda para escolher, combinar ou tirar duvidas, nosso time atende voce
+              pelo WhatsApp.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section className="brand-section brand-banner">
+        <div className="brand-banner-copy">
+          <p className="section-kicker">Novo destino digital</p>
+          <h2>O catalogo agora segue para uma experiencia dedicada da marca.</h2>
+          <p>
+            Em vez da vitrine dentro desta pagina, o acesso principal vai direto para o novo site
+            da Calangus, com foco total na apresentacao da colecao.
+          </p>
+        </div>
+        <div className="brand-banner-actions">
+          <a className="hero-cta" href={CATALOG_URL} target="_blank" rel="noreferrer">
+            Ir para www.calangus.com.br
+          </a>
+          {generalWa && (
+            <a className="hero-cta ghost" href={generalWa} target="_blank" rel="noreferrer">
+              Falar no WhatsApp
+            </a>
           )}
         </div>
-        {generalWa && (
-          <div className="catalog-seller-wrap">
-            <a className="hero-cta" href={generalWa} target="_blank" rel="noreferrer">
-              Falar com um vendedor
-            </a>
-          </div>
-        )}
       </section>
 
-      {gallery.length > 0 ? (
-        <section id="galeria" className="store-gallery">
-          <div className="catalog-head">
-            <h2>Galeria</h2>
-            <p>Looks e peças do dia a dia na Calangus.</p>
-          </div>
-          <div className="store-gallery-grid">
-            {gallery.map((g, i) => {
-              const src = storeMediaSrc(g.imageUrl);
-              return (
-                <button
-                  key={g.id}
-                  type="button"
-                  className="store-gallery-item"
-                  style={{ animationDelay: `${0.04 * i}s` }}
-                  onClick={() => setGalleryOpen(src)}
-                >
-                  <img src={src} alt={g.caption || "Foto da loja"} loading="lazy" />
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
-
       <section id="contato" className="contact-section">
-        <div className="catalog-head">
-          <h2>Entrar em contato</h2>
+        <div className="section-heading">
+          <p className="section-kicker">Fale conosco</p>
+          <h2>Quer ajuda para escolher uma peca ou conhecer melhor a marca?</h2>
           <p>
             {mode === "wa_me"
-              ? "Fale conosco no WhatsApp e escolha um vendedor."
-              : "Deixe seus dados e um vendedor da fila irá te atender."}
+              ? "Abra o WhatsApp e fale com a equipe Calangus."
+              : "Deixe seus dados e nossa equipe entra em contato com voce."}
           </p>
         </div>
         {mode === "wa_me" ? (
           generalWa ? (
             <a className="hero-cta" href={generalWa} target="_blank" rel="noreferrer">
-              Abrir WhatsApp
+              Fale conosco
             </a>
           ) : (
             <p>Configure WHATSAPP_BUSINESS_PHONE no servidor.</p>
@@ -251,17 +250,6 @@ export function Store() {
         <img src="/brand/logo-circle.png" alt="" width={36} height={36} />
         <span>Calangus Moda Jovem</span>
       </footer>
-
-      {galleryOpen && (
-        <button
-          type="button"
-          className="store-gallery-lightbox"
-          onClick={() => setGalleryOpen(null)}
-          aria-label="Fechar foto"
-        >
-          <img src={galleryOpen} alt="" />
-        </button>
-      )}
     </div>
   );
 }

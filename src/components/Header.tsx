@@ -16,8 +16,8 @@ export function Header({ minimal = false }: { minimal?: boolean }) {
       </Link>
       {!minimal && (
         <nav className="store-nav">
-          <a href="#catalogo">Catálogo</a>
-          <a href="#galeria">Galeria</a>
+          <a href="#marca">Marca</a>
+          <a href="#diferenciais">Diferenciais</a>
           <a href="#contato">Contato</a>
           <button type="button" className="theme-toggle" onClick={toggle} aria-label="Alternar tema">
             {theme === "dark" ? "Claro" : "Escuro"}

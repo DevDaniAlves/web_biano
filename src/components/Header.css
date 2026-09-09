@@ -46,6 +46,9 @@
 .store-nav a {
   color: var(--muted);
   font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   transition: color 0.15s ease;
 }
 
