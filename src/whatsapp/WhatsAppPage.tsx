@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState, type FormEvent, type TouchEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type TouchEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { canManageCatalog, clearSession, getStoredUser, getToken, setSession } from "../auth";
 import ChangePasswordDialog from "../components/ChangePasswordDialog";
@@ -115,6 +115,7 @@ function ChatBubble(props: {
   menuOpen: boolean;
   onToggleMenu: () => void;
   onReply: () => void;
+  onDeleteMessage?: (messageId: string) => void;
   onCloseMenu: () => void;
   onLightbox: (src: string, type: "image" | "video") => void;
 }) {
@@ -127,6 +128,7 @@ function ChatBubble(props: {
     menuOpen,
     onToggleMenu,
     onReply,
+    onDeleteMessage,
     onCloseMenu,
     onLightbox,
   } = props;
@@ -163,6 +165,8 @@ function ChatBubble(props: {
     quotedSrc &&
     (quoted?.type === "image" || quoted?.type === "sticker" || quoted?.type === "video");
   const canReply = !readOnly && Boolean(m.externalId) && !m.id.startsWith("tmp-");
+  const isMedia = !m.id.startsWith("tmp-") && (m.type === "audio" || m.type === "video");
+  const canShowMenu = canReply || (isMedia && Boolean(onDeleteMessage));
 
   const swipeX = useRef(0);
   const startX = useRef(0);
@@ -179,7 +183,7 @@ function ChatBubble(props: {
   }
 
   function onTouchStart(e: TouchEvent) {
-    if (!canReply) return;
+    if (!canShowMenu) return;
     const t = e.touches[0];
     startX.current = t.clientX;
     startY.current = t.clientY;
@@ -214,7 +218,7 @@ function ChatBubble(props: {
 
   function onTouchEnd() {
     clearLong();
-    if (swiping.current && swipeX.current >= 48) onReply();
+    if (swiping.current && swipeX.current >= 48 && canReply) onReply();
     swiping.current = false;
     swipeX.current = 0;
     setOffset(0);
@@ -226,7 +230,7 @@ function ChatBubble(props: {
         ↩
       </div>
       <div className="wa-msg-cluster">
-        {canReply && m.direction === "out" && (
+        {canShowMenu && m.direction === "out" && (
           <div className="wa-msg-actions">
             <button
               type="button"
@@ -241,16 +245,33 @@ function ChatBubble(props: {
             </button>
             {menuOpen && (
               <div className="wa-msg-menu" role="menu">
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onReply();
-                  }}
-                >
-                  Responder
-                </button>
+                {canReply && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onReply();
+                    }}
+                  >
+                    Responder
+                  </button>
+                )}
+                {isMedia && onDeleteMessage && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="wa-msg-menu-delete"
+                    style={{ color: "#ef4444" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCloseMenu();
+                      onDeleteMessage(m.id);
+                    }}
+                  >
+                    {m.type === "audio" ? "🗑 Apagar áudio" : "🗑 Apagar vídeo"}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -265,7 +286,7 @@ function ChatBubble(props: {
           onTouchEnd={onTouchEnd}
           onTouchCancel={onTouchEnd}
           onContextMenu={(e) => {
-            if (!canReply) return;
+            if (!canShowMenu) return;
             e.preventDefault();
             onToggleMenu();
           }}
@@ -290,11 +311,49 @@ function ChatBubble(props: {
               <img src={src} alt="" />
             </button>
           )}
-          {m.type === "audio" && src && <AudioBubble key={src} src={src} />}
+          {m.type === "audio" && src && (
+            <div className="wa-media-container">
+              <AudioBubble key={src} src={src} />
+              {onDeleteMessage && !m.id.startsWith("tmp-") && (
+                <button
+                  type="button"
+                  className="wa-media-del-btn"
+                  title="Apagar áudio"
+                  aria-label="Apagar áudio"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteMessage(m.id);
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          )}
           {m.type === "video" && src && (
-            <button type="button" className="wa-media-open" onClick={() => onLightbox(src, "video")}>
-              <video className="wa-video" src={src} preload="metadata" muted />
-            </button>
+            <div className="wa-media-container">
+              <button type="button" className="wa-media-open" onClick={() => onLightbox(src, "video")}>
+                <video className="wa-video" src={src} preload="metadata" muted />
+              </button>
+              {onDeleteMessage && !m.id.startsWith("tmp-") && (
+                <button
+                  type="button"
+                  className="wa-media-del-btn wa-media-del-video"
+                  title="Apagar vídeo"
+                  aria-label="Apagar vídeo"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteMessage(m.id);
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                  </svg>
+                </button>
+              )}
+            </div>
           )}
           {m.type === "document" && src && (
             <a className="wa-file" href={src} target="_blank" rel="noreferrer">
@@ -372,7 +431,7 @@ function ChatBubble(props: {
             {m.direction === "out" && <MsgTicks delivery={delivery} />}
           </small>
         </div>
-        {canReply && m.direction === "in" && (
+        {canShowMenu && m.direction === "in" && (
           <div className="wa-msg-actions">
             <button
               type="button"
@@ -387,16 +446,33 @@ function ChatBubble(props: {
             </button>
             {menuOpen && (
               <div className="wa-msg-menu" role="menu">
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onReply();
-                  }}
-                >
-                  Responder
-                </button>
+                {canReply && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onReply();
+                    }}
+                  >
+                    Responder
+                  </button>
+                )}
+                {isMedia && onDeleteMessage && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="wa-msg-menu-delete"
+                    style={{ color: "#ef4444" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCloseMenu();
+                      onDeleteMessage(m.id);
+                    }}
+                  >
+                    {m.type === "audio" ? "🗑 Apagar áudio" : "🗑 Apagar vídeo"}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -2351,6 +2427,19 @@ function Inbox() {
     }
   }
 
+  async function handleDeleteMessage(messageId: string) {
+    if (!messageId || messageId.startsWith("tmp-")) return;
+    if (!confirm("Tem certeza que deseja apagar esta mídia? Ela será removida do chat e do servidor.")) {
+      return;
+    }
+    try {
+      await waApi.deleteMessage(messageId);
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    } catch (e) {
+      setError(String((e as Error).message));
+    }
+  }
+
   function openOutreach() {
     setError("");
     setOutreachProduct("");
@@ -2728,7 +2817,12 @@ function Inbox() {
                   <button
                     type="button"
                     className={finishing ? "wa-finishing" : ""}
-                    disabled={busy || finishing}
+                    disabled={busy || finishing || Boolean(flags?.metaWindowOpen)}
+                    title={
+                      flags?.metaWindowOpen
+                        ? `Janela Meta ativa (24h desde a última mensagem do cliente). O encerramento só é permitido após expirar (restam ${flags.metaWindowHours ?? 0}h ${flags.metaWindowMinutes ?? 0}m).`
+                        : undefined
+                    }
                     onClick={() => void finish()}
                   >
                     {finishing ? (
@@ -2736,6 +2830,8 @@ function Inbox() {
                         <span className="wa-btn-spinner" aria-hidden />
                         Finalizando…
                       </>
+                    ) : flags?.metaWindowOpen ? (
+                      `Janela 24h Meta (${flags.metaWindowHours ?? 0}h ${flags.metaWindowMinutes ?? 0}m)`
                     ) : (
                       "Finalizar"
                     )}
@@ -2745,7 +2841,12 @@ function Inbox() {
                   <button
                     type="button"
                     className={finishing ? "wa-finishing" : ""}
-                    disabled={busy || finishing}
+                    disabled={busy || finishing || Boolean(flags?.metaWindowOpen)}
+                    title={
+                      flags?.metaWindowOpen
+                        ? `Janela Meta ativa (24h desde a última mensagem do cliente). O encerramento só é permitido após expirar (restam ${flags.metaWindowHours ?? 0}h ${flags.metaWindowMinutes ?? 0}m).`
+                        : undefined
+                    }
                     onClick={() => void finishInactivity()}
                   >
                     {finishing ? (
@@ -2780,6 +2881,7 @@ function Inbox() {
                       setMsgMenuId((cur) => (cur === m.id ? null : m.id))
                     }
                     onReply={() => startReply(m)}
+                    onDeleteMessage={handleDeleteMessage}
                     onCloseMenu={() => setMsgMenuId(null)}
                     onLightbox={(src, type) => setLightbox({ src, type })}
                   />
@@ -2959,24 +3061,47 @@ function Inbox() {
                     {busy ? "…" : "Enviar"}
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    className={`wa-mic${recording ? " rec" : ""}`}
-                    disabled={busy}
-                    onClick={() => void toggleRecord()}
-                    aria-label={recording ? "Parar e enviar áudio" : "Gravar áudio"}
-                  >
-                    {recording ? (
-                      <span className="wa-mic-stop" />
-                    ) : (
-                      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
-                        <path
-                          fill="currentColor"
-                          d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V20H9v2h6v-2h-2v-2.08A7 7 0 0 0 19 11h-2z"
-                        />
-                      </svg>
+                  <div className="wa-mic-group">
+                    {recording && (
+                      <button
+                        type="button"
+                        className="wa-mic-discard"
+                        title="Descartar / Apagar áudio"
+                        aria-label="Descartar gravação de áudio"
+                        onClick={() => {
+                          recCancelRef.current = true;
+                          try {
+                            recRef.current?.stop();
+                          } catch {
+                            /* ignore */
+                          }
+                          setRecording(false);
+                        }}
+                      >
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                          <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                        </svg>
+                      </button>
                     )}
-                  </button>
+                    <button
+                      type="button"
+                      className={`wa-mic${recording ? " rec" : ""}`}
+                      disabled={busy}
+                      onClick={() => void toggleRecord()}
+                      aria-label={recording ? "Parar e enviar áudio" : "Gravar áudio"}
+                    >
+                      {recording ? (
+                        <span className="wa-mic-stop" />
+                      ) : (
+                        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
+                          <path
+                            fill="currentColor"
+                            d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V20H9v2h6v-2h-2v-2.08A7 7 0 0 0 19 11h-2z"
+                          />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 )}
               </div>
               </div>
@@ -3427,6 +3552,27 @@ function MediaCapture({
           <button type="button" className="ghost" onClick={handleClose}>
             Cancelar
           </button>
+          {recording && (
+            <button
+              type="button"
+              className="ghost wa-btn-danger"
+              style={{ color: "#ef4444" }}
+              onClick={() => {
+                cancelRef.current = true;
+                if (recorderRef.current && recorderRef.current.state !== "inactive") {
+                  recorderRef.current.stop();
+                }
+                if (timerRef.current) {
+                  window.clearInterval(timerRef.current);
+                  timerRef.current = null;
+                }
+                setRecording(false);
+                setElapsed(0);
+              }}
+            >
+              Descartar vídeo
+            </button>
+          )}
           {mode === "photo" ? (
             <button type="button" className="snap" disabled={!ready || !!err} onClick={snapPhoto}>
               Capturar

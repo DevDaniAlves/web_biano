@@ -142,6 +142,10 @@ export interface WaContact {
   sellerInactiveMinutes?: number;
   /** Disparo Gestor — lembrete de boleto enviado, aguardando resposta. */
   isBoletoReminder?: boolean;
+  metaWindowOpen?: boolean;
+  metaWindowRemainingMs?: number;
+  metaWindowHours?: number;
+  metaWindowMinutes?: number;
   assignedTo?: { id: string; name: string } | null;
   offeredTo?: { id: string; name: string } | null;
   queue?: { id: string; name: string } | null;
@@ -228,6 +232,10 @@ export const waApi = {
         body,
         ...(quotedMessageId ? { quotedMessageId } : {}),
       }),
+    }),
+  deleteMessage: (id: string) =>
+    request<{ ok: boolean; id: string }>(`/whatsapp/messages/${id}`, {
+      method: "DELETE",
     }),
   sendLocation: (
     contactId: string,

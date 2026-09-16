@@ -1835,3 +1835,74 @@ body:has(.wa-shell) {
   overflow: hidden;
   padding: 0;
 }
+
+/* Botão de descarte/cancelamento de áudio durante gravação */
+.wa-mic-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.wa-mic-discard {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.wa-mic-discard:hover {
+  background: #ef4444;
+  color: #ffffff;
+  transform: scale(1.08);
+}
+
+/* Container de mídias (áudio e vídeo) com botão rápido de exclusão */
+.wa-media-container {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.wa-media-del-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(0, 0, 0, 0.45);
+  color: #ffffff;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: all 0.15s ease;
+  z-index: 5;
+  padding: 0;
+}
+
+.wa-media-del-btn:hover {
+  opacity: 1;
+  background: #ef4444;
+  transform: scale(1.1);
+}
+
+.wa-media-del-video {
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.wa-msg-menu-delete {
+  font-weight: 500;
+}
