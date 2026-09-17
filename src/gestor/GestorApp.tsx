@@ -1,4 +1,4 @@
-﻿import { Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
@@ -397,6 +397,13 @@ export default function GestorApp({ embedded = false }: { embedded?: boolean }) 
               )}
             </p>
             <div className="actions auto-extra">
+              <button
+                className="btn"
+                disabled={!!busy && busy !== "scrape"}
+                onClick={onScrape}
+              >
+                {busy === "scrape" ? "Coletando…" : "Apenas Coletar (sem disparar)"}
+              </button>
               <button
                 className="btn btn-primary"
                 disabled={(!!busy && busy !== "auto") || autoSaving}
