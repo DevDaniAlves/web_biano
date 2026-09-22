@@ -268,6 +268,41 @@
 
 .wa-outreach-combobox {
   position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.wa-outreach-client-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.wa-outreach-new-btn {
+  flex-shrink: 0;
+  padding: 0.55rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid var(--wa-border);
+  background: var(--wa-accent, #128c7e);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.wa-outreach-new-phone {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr auto;
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.wa-outreach-new-phone label {
+  margin: 0;
+}
+
+.wa-outreach-new-phone-num {
+  min-width: 0;
 }
 
 .wa-outreach-suggest {

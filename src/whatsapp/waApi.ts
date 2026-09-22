@@ -399,6 +399,10 @@ export const waApi = {
       method: "POST",
       body: JSON.stringify({ contactId, name }),
     }),
+  listSavedContacts: (q?: string) => {
+    const qs = q?.trim() ? `?q=${encodeURIComponent(q.trim())}` : "";
+    return request<WaContact[]>(`/whatsapp/contacts/saved${qs}`);
+  },
   warnInactivity: (contactId: string) =>
     request("/whatsapp/contacts/inactivity-warn", {
       method: "POST",

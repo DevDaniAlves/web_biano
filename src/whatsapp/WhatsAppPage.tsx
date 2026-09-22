@@ -165,9 +165,16 @@ function ChatBubble(props: {
     quotedSrc &&
     (quoted?.type === "image" || quoted?.type === "sticker" || quoted?.type === "video");
   const canReply = !readOnly && Boolean(m.externalId) && !m.id.startsWith("tmp-");
-  const isMedia = !m.id.startsWith("tmp-") && (m.type === "audio" || m.type === "video");
-  const canShowMenu = canReply || (isMedia && Boolean(onDeleteMessage));
+  const canDelete = Boolean(onDeleteMessage) && !m.id.startsWith("tmp-");
+  const canShowMenu = canReply || canDelete;
 
+  function deleteLabel() {
+    if (m.type === "audio") return "Apagar áudio";
+    if (m.type === "video") return "Apagar vídeo";
+    if (m.type === "image" || m.type === "sticker") return "Apagar imagem";
+    if (m.type === "document") return "Apagar documento";
+    return "Apagar mensagem";
+  }
   const swipeX = useRef(0);
   const startX = useRef(0);
   const startY = useRef(0);
@@ -257,7 +264,7 @@ function ChatBubble(props: {
                     Responder
                   </button>
                 )}
-                {isMedia && onDeleteMessage && (
+                {canDelete && (
                   <button
                     type="button"
                     role="menuitem"
@@ -266,10 +273,10 @@ function ChatBubble(props: {
                     onClick={(e) => {
                       e.stopPropagation();
                       onCloseMenu();
-                      onDeleteMessage(m.id);
+                      onDeleteMessage?.(m.id);
                     }}
                   >
-                    {m.type === "audio" ? "🗑 Apagar áudio" : "🗑 Apagar vídeo"}
+                    {deleteLabel()}
                   </button>
                 )}
               </div>
@@ -458,7 +465,7 @@ function ChatBubble(props: {
                     Responder
                   </button>
                 )}
-                {isMedia && onDeleteMessage && (
+                {canDelete && (
                   <button
                     type="button"
                     role="menuitem"
@@ -467,10 +474,10 @@ function ChatBubble(props: {
                     onClick={(e) => {
                       e.stopPropagation();
                       onCloseMenu();
-                      onDeleteMessage(m.id);
+                      onDeleteMessage?.(m.id);
                     }}
                   >
-                    {m.type === "audio" ? "🗑 Apagar áudio" : "🗑 Apagar vídeo"}
+                    {deleteLabel()}
                   </button>
                 )}
               </div>
@@ -1523,6 +1530,10 @@ function Inbox() {
     "continuidade_pedido" | "retomada_atendimento" | "abordagem_novidades" | "produto_disponivel"
   >("continuidade_pedido");
   const [outreachSuggestOpen, setOutreachSuggestOpen] = useState(false);
+  const [outreachNewMode, setOutreachNewMode] = useState(false);
+  const [outreachDdd, setOutreachDdd] = useState("");
+  const [outreachLocalNumber, setOutreachLocalNumber] = useState("");
+  const [savedContacts, setSavedContacts] = useState<WaContact[]>([]);
   const [outreachProduct, setOutreachProduct] = useState("");
   const [outreachFile, setOutreachFile] = useState<File | null>(null);
   const [outreachPreview, setOutreachPreview] = useState<string | null>(null);
@@ -2429,7 +2440,7 @@ function Inbox() {
 
   async function handleDeleteMessage(messageId: string) {
     if (!messageId || messageId.startsWith("tmp-")) return;
-    if (!confirm("Tem certeza que deseja apagar esta mídia? Ela será removida do chat e do servidor.")) {
+    if (!confirm("Tem certeza que deseja apagar esta mensagem? Ela será removida do chat.")) {
       return;
     }
     try {
@@ -2449,6 +2460,9 @@ function Inbox() {
     setOutreachTemplate("continuidade_pedido");
     setOutreachClientName("");
     setOutreachSuggestOpen(false);
+    setOutreachNewMode(false);
+    setOutreachDdd("");
+    setOutreachLocalNumber("");
     const seed = selected ?? contacts[0] ?? null;
     if (seed) {
       setOutreachContactId(seed.id);
@@ -2460,9 +2474,14 @@ function Inbox() {
       setOutreachPhone("");
     }
     setOutreachOpen(true);
+    void waApi
+      .listSavedContacts()
+      .then(setSavedContacts)
+      .catch(() => setSavedContacts([]));
   }
 
   function pickOutreachContact(c: WaContact) {
+    setOutreachNewMode(false);
     setOutreachContactId(c.id);
     setOutreachQuery(`${c.name || c.phone} · ${c.phone}`);
     setOutreachPhone(c.phone.replace(/\D/g, ""));
@@ -2473,19 +2492,51 @@ function Inbox() {
   }
 
   function onOutreachQueryChange(value: string) {
+    setOutreachNewMode(false);
     setOutreachQuery(value);
     setOutreachContactId("");
     const digits = value.replace(/\D/g, "");
     setOutreachPhone(digits);
     setOutreachSuggestOpen(true);
+    if (value.trim().length >= 2) {
+      void waApi
+        .listSavedContacts(value.trim())
+        .then(setSavedContacts)
+        .catch(() => {});
+    }
+  }
+
+  function startOutreachNew() {
+    setOutreachNewMode(true);
+    setOutreachContactId("");
+    setOutreachQuery("");
+    setOutreachPhone("");
+    setOutreachSuggestOpen(false);
+    setOutreachDdd("");
+    setOutreachLocalNumber("");
+  }
+
+  function onOutreachNewPhoneChange(ddd: string, local: string) {
+    const d = ddd.replace(/\D/g, "").slice(0, 2);
+    const n = local.replace(/\D/g, "").slice(0, 9);
+    setOutreachDdd(d);
+    setOutreachLocalNumber(n);
+    setOutreachContactId("");
+    setOutreachPhone(d && n ? `${d}${n}` : "");
   }
 
   async function submitOutreach(e: FormEvent) {
     e.preventDefault();
     const needsProduct = outreachTemplate === "produto_disponivel";
-    const phoneDigits = outreachPhone.replace(/\D/g, "");
+    const phoneDigits = outreachNewMode
+      ? `${outreachDdd}${outreachLocalNumber}`.replace(/\D/g, "")
+      : outreachPhone.replace(/\D/g, "");
     if (!outreachContactId && phoneDigits.length < 10) {
-      setError("Selecione um cliente ou digite o WhatsApp com DDD");
+      setError(
+        outreachNewMode
+          ? "Informe o DDD (2 dígitos) e o número do WhatsApp"
+          : "Selecione um cliente salvo ou use Novo com DDD e número"
+      );
       return;
     }
     if (needsProduct && (!outreachProduct.trim() || !outreachFile)) {
@@ -2520,10 +2571,12 @@ function Inbox() {
   const flags = selectedFlags ?? selected;
 
   const outreachOptions = useMemo(() => {
-    const map = new Map(contacts.map((c) => [c.id, c]));
+    const map = new Map<string, WaContact>();
+    for (const c of savedContacts) map.set(c.id, c);
+    for (const c of contacts) map.set(c.id, c);
     if (selected && !map.has(selected.id)) map.set(selected.id, selected);
     return [...map.values()];
-  }, [contacts, selected]);
+  }, [contacts, savedContacts, selected]);
 
   const outreachSuggestions = useMemo(() => {
     const q = outreachQuery.trim().toLowerCase();
@@ -2535,12 +2588,16 @@ function Inbox() {
           const phone = c.phone.replace(/\D/g, "");
           return name.includes(q) || phone.includes(digits) || c.phone.toLowerCase().includes(q);
         });
-    return list.slice(0, 8);
+    return list.slice(0, 12);
   }, [outreachOptions, outreachQuery]);
 
   const outreachNeedsProduct = outreachTemplate === "produto_disponivel";
+  const outreachPhoneReady =
+    outreachNewMode
+      ? outreachDdd.length === 2 && outreachLocalNumber.length >= 8
+      : Boolean(outreachContactId || outreachPhone.replace(/\D/g, "").length >= 10);
   const outreachCanSubmit =
-    Boolean(outreachContactId || outreachPhone.replace(/\D/g, "").length >= 10) &&
+    outreachPhoneReady &&
     (!outreachNeedsProduct || (Boolean(outreachProduct.trim()) && Boolean(outreachFile)));
 
   return (
@@ -2813,16 +2870,11 @@ function Inbox() {
                     Avisar inatividade
                   </button>
                 )}
-                {flags?.status === "human" && !readOnly && !selected.webhookPaused && (
+                {flags?.status === "human" && !readOnly && (
                   <button
                     type="button"
                     className={finishing ? "wa-finishing" : ""}
-                    disabled={busy || finishing || Boolean(flags?.metaWindowOpen)}
-                    title={
-                      flags?.metaWindowOpen
-                        ? `Janela Meta ativa (24h desde a última mensagem do cliente). O encerramento só é permitido após expirar (restam ${flags.metaWindowHours ?? 0}h ${flags.metaWindowMinutes ?? 0}m).`
-                        : undefined
-                    }
+                    disabled={busy || finishing}
                     onClick={() => void finish()}
                   >
                     {finishing ? (
@@ -2830,8 +2882,6 @@ function Inbox() {
                         <span className="wa-btn-spinner" aria-hidden />
                         Finalizando…
                       </>
-                    ) : flags?.metaWindowOpen ? (
-                      `Janela 24h Meta (${flags.metaWindowHours ?? 0}h ${flags.metaWindowMinutes ?? 0}m)`
                     ) : (
                       "Finalizar"
                     )}
@@ -2841,12 +2891,7 @@ function Inbox() {
                   <button
                     type="button"
                     className={finishing ? "wa-finishing" : ""}
-                    disabled={busy || finishing || Boolean(flags?.metaWindowOpen)}
-                    title={
-                      flags?.metaWindowOpen
-                        ? `Janela Meta ativa (24h desde a última mensagem do cliente). O encerramento só é permitido após expirar (restam ${flags.metaWindowHours ?? 0}h ${flags.metaWindowMinutes ?? 0}m).`
-                        : undefined
-                    }
+                    disabled={busy || finishing}
                     onClick={() => void finishInactivity()}
                   >
                     {finishing ? (
@@ -3192,67 +3237,110 @@ function Inbox() {
           >
             <h3>Entrar em contato</h3>
             <p className="wa-outreach-hint">
-              Busque um cliente que já conversou, ou digite um WhatsApp novo. Em seguida escolha o
-              template. O destaque fica em <strong>Continuidade do pedido</strong>.
+              Busque um cliente salvo ou toque em <strong>Novo</strong> e informe só o DDD e o
+              número. O destaque fica em <strong>Continuidade do pedido</strong>.
             </p>
             {error && <p className="wa-error">{error}</p>}
 
             <div className="wa-outreach-field">
-              <span className="wa-outreach-label">Cliente ou WhatsApp</span>
-              <div className="wa-outreach-combobox">
-                <input
-                  value={outreachQuery}
-                  onChange={(e) => onOutreachQueryChange(e.target.value)}
-                  onFocus={() => setOutreachSuggestOpen(true)}
-                  onBlur={() => window.setTimeout(() => setOutreachSuggestOpen(false), 120)}
-                  placeholder="Buscar nome / digitar número com DDD"
-                  autoComplete="off"
-                  aria-autocomplete="list"
-                  aria-expanded={outreachSuggestOpen}
-                />
-                {outreachSuggestOpen && (
-                  <div className="wa-outreach-suggest" role="listbox">
-                    {outreachSuggestions.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        className="wa-outreach-suggest-item"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => pickOutreachContact(c)}
-                      >
-                        <strong>{c.name || c.phone}</strong>
-                        <span>{c.phone}</span>
-                      </button>
-                    ))}
-                    {outreachSuggestions.length === 0 && (
-                      <p className="wa-outreach-suggest-empty">
-                        Nenhum contato encontrado. Continue digitando o número para usar um WhatsApp novo.
-                      </p>
-                    )}
-                    {outreachPhone.replace(/\D/g, "").length >= 10 && !outreachContactId && (
-                      <button
-                        type="button"
-                        className="wa-outreach-suggest-item wa-outreach-suggest-new"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => {
-                          setOutreachQuery(outreachPhone.replace(/\D/g, ""));
-                          setOutreachSuggestOpen(false);
-                        }}
-                      >
-                        <strong>Usar número novo</strong>
-                        <span>{outreachPhone.replace(/\D/g, "")}</span>
-                      </button>
-                    )}
+              <span className="wa-outreach-label">Cliente</span>
+              {!outreachNewMode ? (
+                <>
+                  <div className="wa-outreach-client-row">
+                    <div className="wa-outreach-combobox">
+                      <input
+                        value={outreachQuery}
+                        onChange={(e) => onOutreachQueryChange(e.target.value)}
+                        onFocus={() => setOutreachSuggestOpen(true)}
+                        onBlur={() => window.setTimeout(() => setOutreachSuggestOpen(false), 120)}
+                        placeholder="Buscar cliente salvo por nome ou número"
+                        autoComplete="off"
+                        aria-autocomplete="list"
+                        aria-expanded={outreachSuggestOpen}
+                      />
+                      {outreachSuggestOpen && (
+                        <div className="wa-outreach-suggest" role="listbox">
+                          {outreachSuggestions.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              className="wa-outreach-suggest-item"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => pickOutreachContact(c)}
+                            >
+                              <strong>{c.name || c.phone}</strong>
+                              <span>{c.phone}</span>
+                            </button>
+                          ))}
+                          {outreachSuggestions.length === 0 && (
+                            <p className="wa-outreach-suggest-empty">
+                              Nenhum cliente salvo encontrado. Use Novo para cadastrar só com DDD e número.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="wa-outreach-new-btn"
+                      onClick={startOutreachNew}
+                    >
+                      Novo
+                    </button>
                   </div>
-                )}
-              </div>
-              <p className="wa-outreach-meta">
-                {outreachContactId
-                  ? "Contato selecionado da lista"
-                  : outreachPhone.replace(/\D/g, "").length >= 10
-                    ? `Número manual: ${outreachPhone.replace(/\D/g, "")}`
-                    : "Selecione na lista ou digite o número completo"}
-              </p>
+                  <p className="wa-outreach-meta">
+                    {outreachContactId
+                      ? "Cliente selecionado"
+                      : "Selecione na lista ou toque em Novo"}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="wa-outreach-new-phone">
+                    <label>
+                      DDD
+                      <input
+                        value={outreachDdd}
+                        onChange={(e) =>
+                          onOutreachNewPhoneChange(e.target.value, outreachLocalNumber)
+                        }
+                        inputMode="numeric"
+                        placeholder="66"
+                        maxLength={2}
+                        autoComplete="off"
+                      />
+                    </label>
+                    <label className="wa-outreach-new-phone-num">
+                      Número
+                      <input
+                        value={outreachLocalNumber}
+                        onChange={(e) => onOutreachNewPhoneChange(outreachDdd, e.target.value)}
+                        inputMode="numeric"
+                        placeholder="999999999"
+                        maxLength={9}
+                        autoComplete="off"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => {
+                        setOutreachNewMode(false);
+                        setOutreachDdd("");
+                        setOutreachLocalNumber("");
+                        setOutreachPhone("");
+                      }}
+                    >
+                      Lista
+                    </button>
+                  </div>
+                  <p className="wa-outreach-meta">
+                    {outreachDdd.length === 2 && outreachLocalNumber.length >= 8
+                      ? `WhatsApp: 55${outreachDdd}${outreachLocalNumber}`
+                      : "Informe DDD (2 dígitos) e o número — o 55 é montado automaticamente"}
+                  </p>
+                </>
+              )}
             </div>
 
             <label>
