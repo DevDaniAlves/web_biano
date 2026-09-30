@@ -26,6 +26,31 @@ function canSeeAllMessages(user: WaUser | null | undefined) {
   return user?.role === "admin" || Boolean(user?.seeAllMessages);
 }
 
+function VideoThumb({ src, onOpen }: { src: string; onOpen: () => void }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <a className="wa-file" href={src} target="_blank" rel="noreferrer">
+        Vídeo — abrir
+      </a>
+    );
+  }
+  // iOS Safari só desenha o 1º quadro com playsInline + fragmento de tempo.
+  const thumbSrc = src.startsWith("blob:") ? src : `${src}#t=0.1`;
+  return (
+    <button type="button" className="wa-media-open" onClick={onOpen}>
+      <video
+        className="wa-video"
+        src={thumbSrc}
+        preload="metadata"
+        muted
+        playsInline
+        onError={() => setFailed(true)}
+      />
+    </button>
+  );
+}
+
 function mediaSrc(url: string | null) {
   if (!url) return null;
   if (url.startsWith("http") || url.startsWith("blob:")) return url;
@@ -341,9 +366,7 @@ function ChatBubble(props: {
           )}
           {m.type === "video" && src && (
             <div className="wa-media-container">
-              <button type="button" className="wa-media-open" onClick={() => onLightbox(src, "video")}>
-                <video className="wa-video" src={src} preload="metadata" muted />
-              </button>
+              <VideoThumb key={src} src={src} onOpen={() => onLightbox(src, "video")} />
               {onDeleteMessage && !m.id.startsWith("tmp-") && (
                 <button
                   type="button"
@@ -3167,7 +3190,7 @@ function Inbox() {
                   ×
                 </button>
                 {lightbox.type === "video" ? (
-                  <video src={lightbox.src} controls autoPlay onClick={(e) => e.stopPropagation()} />
+                  <video src={lightbox.src} controls autoPlay playsInline onClick={(e) => e.stopPropagation()} />
                 ) : (
                   <img src={lightbox.src} alt="" onClick={(e) => e.stopPropagation()} />
                 )}
