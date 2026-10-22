@@ -1550,7 +1550,7 @@ function Inbox() {
   const [outreachPhone, setOutreachPhone] = useState("");
   const [outreachClientName, setOutreachClientName] = useState("");
   const [outreachTemplate, setOutreachTemplate] = useState<
-    "continuidade_pedido" | "retomada_atendimento" | "abordagem_novidades" | "produto_disponivel"
+    "continuidade_pedido" | "cobranca_atrasado" | "retomada_atendimento" | "abordagem_novidades" | "produto_disponivel"
   >("continuidade_pedido");
   const [outreachSuggestOpen, setOutreachSuggestOpen] = useState(false);
   const [outreachNewMode, setOutreachNewMode] = useState(false);
@@ -3386,6 +3386,11 @@ function Inbox() {
                       title: "Continuidade do pedido",
                       desc: "Referente ao pedido · Utilidade",
                       featured: true,
+                    },
+                    {
+                      id: "cobranca_atrasado" as const,
+                      title: "Cobrança em atraso",
+                      desc: "Lembrar pagamento · Utilidade",
                     },
                     {
                       id: "retomada_atendimento" as const,
