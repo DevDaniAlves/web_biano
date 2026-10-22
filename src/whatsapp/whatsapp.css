@@ -1941,3 +1941,9 @@ body:has(.wa-shell) {
 .wa-msg-menu-delete {
   font-weight: 500;
 }
+
+.wa-dir-list {
+  position: static;
+  max-height: 50vh;
+  overflow-y: auto;
+}

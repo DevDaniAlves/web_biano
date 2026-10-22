@@ -403,6 +403,20 @@ export const waApi = {
     const qs = q?.trim() ? `?q=${encodeURIComponent(q.trim())}` : "";
     return request<WaContact[]>(`/whatsapp/contacts/saved${qs}`);
   },
+  listContactDirectory: (q?: string) => {
+    const qs = q?.trim() ? `?q=${encodeURIComponent(q.trim())}` : "";
+    return request<WaContact[]>(`/whatsapp/contacts/directory${qs}`);
+  },
+  createDirectoryContact: (name: string, phone: string) =>
+    request<WaContact>("/whatsapp/contacts/directory", {
+      method: "POST",
+      body: JSON.stringify({ name, phone }),
+    }),
+  updateDirectoryContact: (id: string, data: { name?: string; phone?: string }) =>
+    request<WaContact>(`/whatsapp/contacts/directory/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
   warnInactivity: (contactId: string) =>
     request("/whatsapp/contacts/inactivity-warn", {
       method: "POST",

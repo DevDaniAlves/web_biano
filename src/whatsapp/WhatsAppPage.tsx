@@ -1544,7 +1544,55 @@ function Inbox() {
   const [saveContactDraft, setSaveContactDraft] = useState("");
   const [assumeOpen, setAssumeOpen] = useState(false);
   const [assumeTarget, setAssumeTarget] = useState("");
+  const [dirOpen, setDirOpen] = useState(false);
+  const [dirQuery, setDirQuery] = useState("");
+  const [dirList, setDirList] = useState<WaContact[]>([]);
+  const [dirEditId, setDirEditId] = useState<string | null>(null); // "new" = novo contato
+  const [dirName, setDirName] = useState("");
+  const [dirPhone, setDirPhone] = useState("");
+  const [dirError, setDirError] = useState<string | null>(null);
+  const [dirSaving, setDirSaving] = useState(false);
   const [outreachOpen, setOutreachOpen] = useState(false);
+
+  useEffect(() => {
+    if (!dirOpen) return;
+    const t = window.setTimeout(() => {
+      waApi
+        .listContactDirectory(dirQuery)
+        .then(setDirList)
+        .catch((e) => setDirError(e instanceof Error ? e.message : String(e)));
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [dirOpen, dirQuery]);
+
+  function startDirEdit(c: WaContact | null) {
+    setDirError(null);
+    setDirEditId(c ? c.id : "new");
+    setDirName(c?.savedName || c?.name || "");
+    setDirPhone(c?.phone || "");
+  }
+
+  async function submitDir(e: FormEvent) {
+    e.preventDefault();
+    if (!dirEditId) return;
+    setDirSaving(true);
+    setDirError(null);
+    try {
+      const saved =
+        dirEditId === "new"
+          ? await waApi.createDirectoryContact(dirName, dirPhone)
+          : await waApi.updateDirectoryContact(dirEditId, { name: dirName, phone: dirPhone });
+      setDirList((prev) => {
+        const rest = prev.filter((c) => c.id !== saved.id);
+        return [saved, ...rest];
+      });
+      setDirEditId(null);
+    } catch (err) {
+      setDirError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDirSaving(false);
+    }
+  }
   const [outreachContactId, setOutreachContactId] = useState("");
   const [outreachQuery, setOutreachQuery] = useState("");
   const [outreachPhone, setOutreachPhone] = useState("");
@@ -2636,6 +2684,17 @@ function Inbox() {
           >
             Entrar em contato
           </button>
+          <button
+            type="button"
+            className="wa-outreach-btn"
+            onClick={() => {
+              setDirEditId(null);
+              setDirError(null);
+              setDirOpen(true);
+            }}
+          >
+            Contatos
+          </button>
         </div>
         <div className="wa-list-tools">
           <input
@@ -3243,6 +3302,90 @@ function Inbox() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {dirOpen && (
+        <div
+          className="wa-outreach-overlay"
+          role="dialog"
+          aria-label="Contatos"
+          onClick={() => !dirSaving && setDirOpen(false)}
+        >
+          <div
+            className="wa-outreach-modal wa-outreach-modal--wide"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3>Contatos</h3>
+            {dirError && <p className="wa-error">{dirError}</p>}
+            {dirEditId ? (
+              <form onSubmit={(e) => void submitDir(e)} className="wa-outreach-field">
+                <label>
+                  Nome
+                  <input
+                    value={dirName}
+                    onChange={(e) => setDirName(e.target.value)}
+                    maxLength={60}
+                    required
+                    autoFocus
+                  />
+                </label>
+                <label>
+                  WhatsApp (DDD + número)
+                  <input
+                    value={dirPhone}
+                    onChange={(e) => setDirPhone(e.target.value)}
+                    inputMode="numeric"
+                    placeholder="66999999999"
+                    required
+                  />
+                </label>
+                <div className="wa-outreach-actions">
+                  <button type="button" className="ghost" onClick={() => setDirEditId(null)}>
+                    Voltar
+                  </button>
+                  <button type="submit" disabled={dirSaving}>
+                    {dirSaving ? "Salvando…" : "Salvar"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <div className="wa-outreach-client-row">
+                  <input
+                    value={dirQuery}
+                    onChange={(e) => setDirQuery(e.target.value)}
+                    placeholder="Buscar por nome ou número"
+                    autoComplete="off"
+                  />
+                  <button type="button" className="wa-outreach-new-btn" onClick={() => startDirEdit(null)}>
+                    Novo
+                  </button>
+                </div>
+                <div className="wa-outreach-suggest wa-dir-list">
+                  {dirList.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className="wa-outreach-suggest-item"
+                      onClick={() => startDirEdit(c)}
+                    >
+                      <strong>{c.savedName || c.name || c.phone}</strong>
+                      <span>{c.phone} · Editar</span>
+                    </button>
+                  ))}
+                  {dirList.length === 0 && (
+                    <p className="wa-outreach-suggest-empty">Nenhum contato encontrado.</p>
+                  )}
+                </div>
+                <div className="wa-outreach-actions">
+                  <button type="button" className="ghost" onClick={() => setDirOpen(false)}>
+                    Fechar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
